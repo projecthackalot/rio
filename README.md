@@ -7,7 +7,32 @@ Nothing moves. Nothing gets dumped.
 
 ---
 
-## Quick Start
+## Quick Start (Next.js Application) - Primary
+
+The completely redesigned, Level 1 production application is located in the `web/` directory.
+
+```bash
+# 1. Change to the new web directory
+cd web
+
+# 2. Install dependencies
+npm install
+
+# 3. Copy the environment variables template and fill them out
+cp .env.example .env.local
+
+# 4. Start the Next.js development server
+npm run dev
+```
+
+The new web app opens at `http://localhost:3000`.
+
+---
+
+## Quick Start (Streamlit Prototype) - Legacy
+
+If you wish to run the original Streamlit prototype (which operates with in-memory simulated data):
+
 
 ```bash
 # 1. Install dependencies
