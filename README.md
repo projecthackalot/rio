@@ -72,3 +72,4 @@ The app opens at `http://localhost:8501` with layout=wide.
 5. **Impact estimates** use approximate embodied-carbon coefficients, not measured values.
 6. **No image upload** — proof video uploader accepts files but only displays a SHA-256 hash.
 7. **Single browser tab** — concurrent multi-user sessions are not supported.
+# rio
