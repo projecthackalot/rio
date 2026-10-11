@@ -1,161 +1,93 @@
-import * as crypto from 'crypto';
+/**
+ * Legacy compatibility layer for the original prototype API (rupees and
+ * simulated hours). New code should import from `@/domain/*`, which works in
+ * integer paise and real timestamps; these wrappers delegate to it so the
+ * rules exist in exactly one place.
+ *
+ * The prototype's `watchersCount` was removed: it fabricated watcher numbers,
+ * which Level 1 must not present as real data.
+ */
 
-// ── Category coefficients ──────────────────────────────────────────────────
-export const CATEGORIES: Record<string, {
-  tare_kg: number;
-  volume_m3: number;
-  embodied_co2e: number;
-  default_start: number;
-  default_floor: number;
-  emoji: string;
-}> = {
-  "Air cooler": {
-    tare_kg: 14.5, volume_m3: 0.28, embodied_co2e: 62.0,
-    default_start: 1800, default_floor: 500, emoji: "❄️",
-  },
-  "Foam mattress": {
-    tare_kg: 11.2, volume_m3: 0.35, embodied_co2e: 44.0,
-    default_start: 1200, default_floor: 300, emoji: "🛏️",
-  },
-  "Kettle/immersion": {
-    tare_kg: 1.2, volume_m3: 0.01, embodied_co2e: 15.5,
-    default_start: 500, default_floor: 150, emoji: "🫖",
-  },
-  "Drafter+board": {
-    tare_kg: 1.8, volume_m3: 0.04, embodied_co2e: 8.2,
-    default_start: 450, default_floor: 150, emoji: "📐",
-  },
-  "Study table+chair": {
-    tare_kg: 18.0, volume_m3: 0.42, embodied_co2e: 52.0,
-    default_start: 1500, default_floor: 400, emoji: "🪑",
-  },
-};
+import { CATEGORIES as DOMAIN_CATEGORIES } from '@/domain/catalog'
+import { estimateRentalImpact, estimateTransferImpact } from '@/domain/impact'
+import { PAISE_PER_RUPEE, rupeesToPaise } from '@/domain/money'
+import { HOUR_MS, currentPricePaise, urgency } from '@/domain/pricing'
+import { quoteRentToOwn, rentalCostPaise, rentalDepositPaise, type RentalPeriod } from '@/domain/rental'
 
-const LOGISTICS_CO2_PER_TRANSFER = 2.2;
-export const DECAY_END_BEFORE_DEPARTURE = 2;
-export const STAFF_CUTOFF_BEFORE_DEPARTURE = 1;
-export const DEFAULT_ALPHA = 1.0;
+export const DECAY_END_BEFORE_DEPARTURE = 2
+export const STAFF_CUTOFF_BEFORE_DEPARTURE = 1
 
-export const RENT_RATES: Record<string, { fraction: number; hours: number }> = {
-  "DAY": { fraction: 0.02, hours: 24 },
-  "WEEK": { fraction: 0.10, hours: 168 },
-  "MONTH": { fraction: 0.25, hours: 720 },
-};
-
-export const DEPOSIT_FRACTION = 0.20;
-export const RENT_TO_OWN_CREDIT_FRACTION = 0.50;
-export const DAMAGE_DEDUCTION_FRACTION = 0.25;
-
-// ── Pricing ────────────────────────────────────────────────────────────────
-
-export function dutchPrice(
-  startPrice: number,
-  floorPrice: number,
-  listedHour: number,
-  departureHour: number,
-  simHour: number,
-  alpha: number = DEFAULT_ALPHA
-): number {
-  const decayEnd = departureHour - DECAY_END_BEFORE_DEPARTURE;
-  const span = decayEnd - listedHour;
-  if (span <= 0) return _round5(floorPrice);
-  
-  const frac = Math.max(0.0, Math.min(1.0, (simHour - listedHour) / span));
-  const price = Math.max(floorPrice, startPrice - Math.pow(frac, alpha) * (startPrice - floorPrice));
-  return _round5(price);
+const LEGACY_NAME_TO_SLUG: Record<string, string> = {
+  'Air cooler': 'air-cooler',
+  'Foam mattress': 'foam-mattress',
+  'Kettle/immersion': 'kettle-immersion',
+  'Drafter+board': 'drafter-board',
+  'Study table+chair': 'study-table-chair',
 }
 
-function _round5(value: number): number {
-  return Math.round(value / 5) * 5;
-}
+export const CATEGORIES = Object.fromEntries(
+  Object.entries(LEGACY_NAME_TO_SLUG).map(([name, slug]) => {
+    const c = DOMAIN_CATEGORIES.find((x) => x.slug === slug)!
+    return [
+      name,
+      {
+        tare_kg: c.tareKg,
+        volume_m3: c.volumeM3,
+        embodied_co2e: c.embodiedCo2eKg,
+        default_start: c.defaultStartPaise / PAISE_PER_RUPEE,
+        default_floor: c.defaultFloorPaise / PAISE_PER_RUPEE,
+      },
+    ]
+  }),
+)
 
-// ── Status derivation ─────────────────────────────────────────────────────
+const toRupees = (p: number) => p / PAISE_PER_RUPEE
+
+/** Level 1 ships the prototype's default linear curve only (alpha = 1). */
+export function dutchPrice(startPrice: number, floorPrice: number, listedHour: number, departureHour: number, simHour: number, alpha = 1): number {
+  if (alpha !== 1) throw new RangeError('Only the linear decay curve (alpha = 1) is supported')
+  return toRupees(
+    currentPricePaise(
+      { startPaise: rupeesToPaise(startPrice), floorPaise: rupeesToPaise(floorPrice), listedAt: listedHour * HOUR_MS, departureAt: departureHour * HOUR_MS },
+      simHour * HOUR_MS,
+    ),
+  )
+}
 
 export function hoursRemaining(departureHour: number | null, simHour: number): number | null {
-  if (departureHour === null) return null;
-  return Math.max(0, departureHour - simHour);
+  if (departureHour === null) return null
+  return Math.max(0, departureHour - simHour)
 }
 
 export function effectiveStatus(storedStatus: string, departureHour: number | null, simHour: number): string {
-  if (departureHour === null) return storedStatus;
-  const hr = hoursRemaining(departureHour, simHour);
+  const hr = hoursRemaining(departureHour, simHour)
   if (hr !== null && hr <= STAFF_CUTOFF_BEFORE_DEPARTURE) {
-    if (storedStatus === "ACTIVE") return "STAFF_RESERVE";
-    if (storedStatus === "RENTED") return "RETURN_DUE";
+    if (storedStatus === 'ACTIVE') return 'STAFF_RESERVE'
+    if (storedStatus === 'RENTED') return 'RETURN_DUE'
   }
-  return storedStatus;
+  return storedStatus
 }
 
+/** Prototype badge names: KEEPER, FRESH (>48h), DROPPING (>3h), CRITICAL (≤3h). */
 export function urgencyBadge(departureHour: number | null, simHour: number): string {
-  const hr = hoursRemaining(departureHour, simHour);
-  if (hr === null) return "KEEPER";
-  if (hr > 48) return "FRESH";
-  if (hr > 3) return "DROPPING";
-  return "CRITICAL";
+  const u = urgency(departureHour === null ? null : departureHour * HOUR_MS, simHour * HOUR_MS)
+  return u === 'FINAL_HOUR' || u === 'DEPARTED' ? 'CRITICAL' : u
 }
 
-export function watchersCount(
-  itemId: string,
-  simHour: number,
-  departureHour: number | null,
-  startPrice: number,
-  floorPrice: number,
-  listedHour: number
-): number {
-  // Deterministic random
-  const hash = crypto.createHash('md5').update(itemId).digest('hex').slice(0, 8);
-  const seed = parseInt(hash, 16);
-  const base = (seed % 5) + 2; // 2-6
-  
-  let extra = 0;
-  if (departureHour !== null && departureHour > listedHour) {
-    const decayEnd = departureHour - DECAY_END_BEFORE_DEPARTURE;
-    const span = Math.max(1, decayEnd - listedHour);
-    const frac = Math.max(0.0, Math.min(1.0, (simHour - listedHour) / span));
-    extra = Math.floor(frac * 12);
-  }
-  return base + extra;
+function legacyImpact(slug: string | undefined, fn: typeof estimateTransferImpact) {
+  const i = fn(slug ?? '')
+  return { co2_avoided_kg: i.co2eAvoidedKg, waste_diverted_kg: i.wasteDivertedKg, volume_diverted_m3: i.volumeDivertedM3 }
 }
 
-// ── Impact math ────────────────────────────────────────────────────────────
+export const impactSaleOrTransfer = (category: string) => legacyImpact(LEGACY_NAME_TO_SLUG[category], estimateTransferImpact)
+export const impactRental = (category: string, substitutionRate = 0.5) =>
+  legacyImpact(LEGACY_NAME_TO_SLUG[category], (slug) => estimateRentalImpact(slug, substitutionRate))
 
-export function impactSaleOrTransfer(category: string): { co2_avoided_kg: number; waste_diverted_kg: number; volume_diverted_m3: number } {
-  const cat = CATEGORIES[category];
-  if (!cat) return { co2_avoided_kg: 0, waste_diverted_kg: 0, volume_diverted_m3: 0 };
-  return {
-    co2_avoided_kg: cat.embodied_co2e + LOGISTICS_CO2_PER_TRANSFER,
-    waste_diverted_kg: cat.tare_kg,
-    volume_diverted_m3: cat.volume_m3,
-  };
-}
+export const rentalCost = (startPrice: number, period: string) => toRupees(rentalCostPaise(rupeesToPaise(startPrice), period as RentalPeriod))
 
-export function impactRental(category: string, substitutionRate: number = 0.5): { co2_avoided_kg: number; waste_diverted_kg: number; volume_diverted_m3: number } {
-  const cat = CATEGORIES[category];
-  if (!cat) return { co2_avoided_kg: 0, waste_diverted_kg: 0, volume_diverted_m3: 0 };
-  return {
-    co2_avoided_kg: cat.embodied_co2e * substitutionRate,
-    waste_diverted_kg: 0.0,
-    volume_diverted_m3: 0.0,
-  };
-}
+export const rentalDeposit = (startPrice: number) => toRupees(rentalDepositPaise(rupeesToPaise(startPrice)))
 
-// ── Rental calculations ───────────────────────────────────────────────────
-
-export function rentalCost(startPrice: number, period: string): number {
-  const rate = RENT_RATES[period]?.fraction || 0;
-  return Math.round(startPrice * rate);
-}
-
-export function rentalDeposit(startPrice: number): number {
-  return Math.round(startPrice * DEPOSIT_FRACTION);
-}
-
-export function rentToOwnPrice(
-  currentDutchPrice: number,
-  floorPrice: number,
-  totalRentPaid: number
-): { buyPrice: number; credit: number; currentDutchPrice: number } {
-  const credit = totalRentPaid * RENT_TO_OWN_CREDIT_FRACTION;
-  const buyPrice = Math.max(floorPrice, currentDutchPrice - credit);
-  return { buyPrice, credit, currentDutchPrice };
+export function rentToOwnPrice(currentDutchPrice: number, floorPrice: number, totalRentPaid: number) {
+  const q = quoteRentToOwn(rupeesToPaise(currentDutchPrice), rupeesToPaise(floorPrice), rupeesToPaise(totalRentPaid))
+  return { buyPrice: toRupees(q.buyPricePaise), credit: toRupees(q.earnedCreditPaise), currentDutchPrice }
 }

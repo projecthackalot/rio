@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RIO web app (Level 1)
 
-## Getting Started
+The Next.js 16 + Supabase application for RIO, a move-out marketplace for hostels.
+Students list what they can't take home. The price falls towards their floor as departure
+nears, items change hands with a single-use QR code, and anything unsold is routed to campus
+staff in the final hour. **All payments are simulated sandbox money.**
 
-First, run the development server:
+## Quick start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local     # add your Supabase URL + anon key
+# apply supabase/migrations to your project: see ../docs/level-1/SETUP.md §3
+npm run dev                    # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Optional demo data for a development project:
+`RIO_DEMO_SEED=true RIO_DEMO_PASSWORD='…' npm run seed:demo` (SETUP.md §7).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Script | Purpose |
+|---|---|
+| `dev` / `build` / `start` | Next.js |
+| `lint`, `typecheck`, `format`, `format:check` | ESLint, `tsc`, Prettier |
+| `test` | Vitest: domain, database (PGlite) and opt-in live suites |
+| `test:unit`, `test:db`, `test:integration` | individual suites |
+| `test:e2e` | Playwright + axe (run `build` first; it starts `next start` on port 3100) |
+| `seed:demo` | guarded demo seed (never in production) |
+| `verify` | format check, lint, typecheck, tests and build |
 
-## Learn More
+## Features
 
-To learn more about Next.js, take a look at the following resources:
+- **Auth:** email/password with confirmation, magic link, password reset, Google OAuth,
+  logout. Every signup is a student; elevated roles are granted only by an admin.
+- **Marketplace:** server-side search, category, condition, price range, rentable filter,
+  sorting and pagination. The live Dutch-auction price is shown with the floor, deadline and
+  decay progress.
+- **Listings:** create and edit with photos (validated by magic bytes, stored in your own
+  storage folder), withdraw and relist. Re-pricing restarts the auction.
+- **Claims:** atomic, one open claim per listing, anti-hoarding, sandbox escrow, cancel before handover.
+- **QR handovers:** expiring, single-use, hashed, receiver-bound codes. Camera scanning
+  (`BarcodeDetector` or a lazily loaded `jsQR`) with manual entry always available.
+- **Rentals:** day, week or month; deposit; pickup and return by QR; a rent-to-own
+  breakdown and conversion.
+- **Disputes:** private evidence; decisions by a scoped, uninvolved warden; 25% damage deduction on deposits.
+- **Warden dashboard:** final-hour queue and routing to staff, open disputes, staff
+  transfers, no-dues check, estimated impact.
+- **Staff custody:** queue plus QR acceptance. **Admin:** scoped role management with an audit trail.
+- **My Activity:** buying, selling, rentals, staff handoffs, listings, and the full sandbox ledger.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Documentation
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`../docs/level-1/`: [SETUP](../docs/level-1/SETUP.md),
+[ARCHITECTURE](../docs/level-1/ARCHITECTURE.md),
+[DATA_MODEL](../docs/level-1/DATA_MODEL.md),
+[BUSINESS_RULES](../docs/level-1/BUSINESS_RULES.md),
+[SECURITY](../docs/level-1/SECURITY.md),
+[ACCESSIBILITY](../docs/level-1/ACCESSIBILITY.md),
+[TEST_PLAN](../docs/level-1/TEST_PLAN.md),
+[KNOWN_LIMITATIONS](../docs/level-1/KNOWN_LIMITATIONS.md),
+[LEVELS_ROADMAP](../docs/level-1/LEVELS_ROADMAP.md).

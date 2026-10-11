@@ -1,5 +1,7 @@
 # Implementation Plan: Level 1 Foundation Build
 
+> **Status (2026-10-10):** slices 1–7 are implemented in `web/`. External configuration (applying migrations, Google OAuth, Supabase Auth URLs) and the opt-in live/journey test runs remain. See TEST_PLAN.md and KNOWN_LIMITATIONS.md.
+
 ## Approach
 We will build the new RIO application in manageable vertical slices inside a `web/` directory, preserving the original Streamlit app in the root until the new application is fully functional and verified.
 

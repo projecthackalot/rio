@@ -1,53 +1,187 @@
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { QrCode, Repeat, ShieldCheck, Users } from 'lucide-react'
+import { DecayDiagram } from '@/components/marketing/decay-diagram'
+import { SiteFooter } from '@/components/shell/site-footer'
+import { SiteHeader } from '@/components/shell/site-header'
+import { buttonClass } from '@/components/ui/button'
+import { CATEGORIES } from '@/domain/catalog'
+import { LOGISTICS_CO2E_PER_TRANSFER_KG } from '@/domain/impact'
+import { formatINR } from '@/domain/money'
+import { RENTAL_PERIODS, DEPOSIT_BPS, DAMAGE_DEDUCTION_BPS, RENT_TO_OWN_CREDIT_BPS } from '@/domain/rental'
 
-export default async function LandingPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+const STEPS = [
+  {
+    title: 'List it where it stands',
+    body: 'Photograph the cooler, mattress or drafter in your room. Set a starting price, the lowest price you’d accept, and the day you leave.',
+  },
+  {
+    title: 'The price walks down',
+    body: 'The price falls steadily towards your floor and reaches it two hours before you leave. Buyers see the floor and the deadline up front.',
+  },
+  {
+    title: 'Claim, then meet',
+    body: 'A buyer claims the item and the money waits in sandbox escrow. Your exact room is never shown publicly; you arrange the handover yourselves.',
+  },
+  {
+    title: 'Scan to finish',
+    body: 'You show a one-time QR code, the buyer scans it, and the sale settles. Codes expire in 10 minutes and work once.',
+  },
+  {
+    title: 'Nothing gets dumped',
+    body: 'In your final hour, anything unsold is routed to campus staff by your warden, and they take custody with the same QR handover.',
+  },
+]
 
+const pct = (bps: number) => `${bps / 100}%`
+
+export default function LandingPage() {
   return (
-    <div className="bg-white min-h-screen">
-      <header className="absolute inset-x-0 top-0 z-50">
-        <nav className="flex items-center justify-between p-6 lg:px-8" aria-label="Global">
-          <div className="flex lg:flex-1">
-            <Link href="/" className="-m-1.5 p-1.5">
-              <span className="text-2xl font-black tracking-tighter text-orange-600">RIO</span>
-            </Link>
-          </div>
-          <div className="flex flex-1 justify-end">
-            {user ? (
-              <Link href="/dashboard" className="text-sm font-semibold leading-6 text-zinc-900 hover:text-orange-600">
-                Go to Dashboard <span aria-hidden="true">&rarr;</span>
-              </Link>
-            ) : (
-              <Link href="/auth/login" className="text-sm font-semibold leading-6 text-zinc-900 hover:text-orange-600">
-                Log in <span aria-hidden="true">&rarr;</span>
-              </Link>
-            )}
-          </div>
-        </nav>
-      </header>
-
-      <div className="relative isolate px-6 pt-14 lg:px-8">
-        <div className="mx-auto max-w-2xl py-32 sm:py-48 lg:py-56">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold tracking-tight text-zinc-900 sm:text-6xl">
-              Nothing moves. Nothing gets dumped.
-            </h1>
-            <p className="mt-6 text-lg leading-8 text-zinc-600">
-              The hyper-local circular economy platform for hostels & PGs. Leave your stuff exactly where it is.
+    <>
+      <SiteHeader />
+      <main id="main" tabIndex={-1} className="outline-none">
+        <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 pt-10 pb-16 sm:px-6 md:pt-16 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:pb-24">
+          <div>
+            <h1 className="text-5xl leading-[1.02] font-bold sm:text-6xl lg:text-7xl">Leaving campus? Leave your stuff for the next batch.</h1>
+            <p className="text-muted mt-6 max-w-xl text-lg sm:text-xl">
+              RIO is a move-out marketplace for hostels. Sell or rent what you can’t carry home, at a price that drops as your departure nears, and hand it over
+              with a QR scan.
             </p>
-            <div className="mt-10 flex items-center justify-center gap-x-6">
-              <Link
-                href="/auth/login"
-                className="rounded-full bg-orange-600 px-8 py-3.5 text-sm font-semibold text-white shadow-sm hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 transition-all"
-              >
-                Get started
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link href="/marketplace" className={buttonClass('primary', 'lg')}>
+                Browse the marketplace
+              </Link>
+              <Link href="/auth/signup" className={buttonClass('secondary', 'lg')}>
+                Create a student account
               </Link>
             </div>
+            <p className="text-muted mt-5 text-sm">Pilot: all payments are simulated sandbox money.</p>
           </div>
-        </div>
-      </div>
+          <DecayDiagram />
+        </section>
+
+        <section id="how-it-works" aria-labelledby="how-heading" className="border-line bg-chalk border-y">
+          <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
+            <h2 id="how-heading" className="max-w-2xl text-4xl">
+              How a handover works
+            </h2>
+            <ol className="mt-10 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-5">
+              {STEPS.map((s, i) => (
+                <li key={s.title} className="relative">
+                  <span aria-hidden="true" className="font-display text-forest text-5xl font-bold">
+                    {i + 1}
+                  </span>
+                  <h3 className="mt-2 text-xl">{s.title}</h3>
+                  <p className="text-muted mt-2">{s.body}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section id="rules" aria-labelledby="rules-heading" className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
+          <div className="grid gap-12 lg:grid-cols-2">
+            <div>
+              <h2 id="rules-heading" className="text-4xl">
+                The rules, in numbers
+              </h2>
+              <p className="text-muted mt-4 max-w-lg">
+                No hidden maths. These are the exact rules the app and the database use. Every amount is rounded to the rupee and shown before you commit.
+              </p>
+              <dl className="divide-line border-line mt-8 divide-y border-y">
+                {(Object.keys(RENTAL_PERIODS) as (keyof typeof RENTAL_PERIODS)[]).map((k) => (
+                  <Rule key={k} term={`Rent for a ${RENTAL_PERIODS[k].label.toLowerCase()}`} value={`${pct(RENTAL_PERIODS[k].bps)} of the starting price`} />
+                ))}
+                <Rule term="Refundable deposit" value={`${pct(DEPOSIT_BPS)} of the starting price`} />
+                <Rule term="Rent-to-own credit" value={`${pct(RENT_TO_OWN_CREDIT_BPS)} of rent paid, never below the floor`} />
+                <Rule term="Damage deduction" value={`${pct(DAMAGE_DEDUCTION_BPS)} of the deposit, decided by a warden`} />
+                <Rule term="Price rounding" value="Nearest ₹5, never below your floor" />
+              </dl>
+            </div>
+            <div className="grid content-start gap-4 sm:grid-cols-2">
+              <Feature icon={<ShieldCheck aria-hidden="true" className="size-5" />} title="Room numbers stay private">
+                Only you and your hostel’s warden can see your block and room.
+              </Feature>
+              <Feature icon={<QrCode aria-hidden="true" className="size-5" />} title="Single-use QR codes">
+                Checked by the server, valid for 10 minutes, and useless once scanned.
+              </Feature>
+              <Feature icon={<Repeat aria-hidden="true" className="size-5" />} title="Rent first, buy later">
+                Half of what you paid in rent comes off the price if you decide to keep it.
+              </Feature>
+              <Feature icon={<Users aria-hidden="true" className="size-5" />} title="Wardens settle disputes">
+                A warden from your hostel, who isn’t involved, decides refunds and damage claims.
+              </Feature>
+            </div>
+          </div>
+        </section>
+
+        <section aria-labelledby="impact-heading" className="border-line bg-forest text-chalk border-t">
+          <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
+            <h2 id="impact-heading" className="text-chalk max-w-2xl text-4xl">
+              What a handover is estimated to save
+            </h2>
+            <p className="text-chalk/85 mt-4 max-w-2xl">
+              Estimates, not measurements: embodied carbon for each category plus about {LOGISTICS_CO2E_PER_TRANSFER_KG.toFixed(1)} kg of avoided transport when
+              an item changes hands in place.
+            </p>
+            <div className="mt-8 overflow-x-auto" role="region" aria-label="Impact estimates table (scrollable)" tabIndex={0}>
+              <table className="w-full min-w-[34rem] text-left text-sm">
+                <caption className="sr-only">Estimated impact per item by category</caption>
+                <thead>
+                  <tr className="border-chalk/25 text-chalk/80 border-b">
+                    <th scope="col" className="py-3 pr-4 font-medium">
+                      Category
+                    </th>
+                    <th scope="col" className="py-3 pr-4 font-medium">
+                      CO₂e avoided (est.)
+                    </th>
+                    <th scope="col" className="py-3 pr-4 font-medium">
+                      Kept out of waste
+                    </th>
+                    <th scope="col" className="py-3 font-medium">
+                      Typical starting price
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {CATEGORIES.filter((c) => c.embodiedCo2eKg > 0).map((c) => (
+                    <tr key={c.slug} className="border-chalk/15 border-b">
+                      <th scope="row" className="py-3 pr-4 font-medium">
+                        {c.name}
+                      </th>
+                      <td className="tabular py-3 pr-4">{(c.embodiedCo2eKg + LOGISTICS_CO2E_PER_TRANSFER_KG).toFixed(1)} kg</td>
+                      <td className="tabular py-3 pr-4">{c.tareKg} kg</td>
+                      <td className="tabular py-3">{formatINR(c.defaultStartPaise)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Link href="/auth/signup" className={`${buttonClass('secondary', 'lg')} border-chalk bg-chalk mt-10`}>
+              Create a student account
+            </Link>
+          </div>
+        </section>
+      </main>
+      <SiteFooter />
+    </>
+  )
+}
+
+function Rule({ term, value }: { term: string; value: string }) {
+  return (
+    <div className="flex flex-wrap justify-between gap-x-6 gap-y-1 py-3">
+      <dt className="font-medium">{term}</dt>
+      <dd className="text-muted">{value}</dd>
+    </div>
+  )
+}
+
+function Feature({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-card border-line bg-chalk border p-5">
+      <div className="bg-forest-tint text-forest flex size-10 items-center justify-center rounded-full">{icon}</div>
+      <h3 className="mt-4 text-lg">{title}</h3>
+      <p className="text-muted mt-1 text-sm">{children}</p>
     </div>
   )
 }

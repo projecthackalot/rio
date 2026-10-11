@@ -3,29 +3,40 @@
 **Hyperlocal circular-economy platform for hostels & PGs.**  
 Nothing moves. Nothing gets dumped.
 
-> 🔬 **This is a prototype with simulated data and payments.**
+> **Level 1.** A working, database-backed web app with real authentication. **All payments are simulated sandbox money.** Impact figures are estimates.
 
 ---
 
-## Quick Start (Next.js Application) - Primary
+## Web application (primary): `web/`
 
-The completely redesigned, Level 1 production application is located in the `web/` directory.
+Next.js 16 + React 19 + TypeScript + Supabase (Postgres with Row Level Security, Auth, Storage).
 
 ```bash
-# 1. Change to the new web directory
 cd web
-
-# 2. Install dependencies
 npm install
-
-# 3. Copy the environment variables template and fill them out
-cp .env.example .env.local
-
-# 4. Start the Next.js development server
-npm run dev
+cp .env.example .env.local      # Supabase URL + anon key (never commit .env.local)
+# apply web/supabase/migrations to your Supabase project (docs/level-1/SETUP.md §3)
+npm run dev                     # http://localhost:3000
 ```
 
-The new web app opens at `http://localhost:3000`.
+| | Status |
+|---|---|
+| Email/password, magic link, password reset, logout | implemented (needs Supabase Auth URL config) |
+| Google OAuth | implemented; **needs your Google Cloud client + Supabase provider settings** |
+| Marketplace, listings with photos, Dutch auction, claims, QR handovers, rentals, rent-to-own, disputes, warden and staff dashboards, admin roles | implemented |
+| Database schema, RLS, storage policies | 5 forward migrations; **you apply them** (not yet applied to the project in `.env.local`) |
+| Payments | **simulated only** (Level 2: real gateway) |
+
+Verification (last run, 2026-10-10): lint, typecheck and format pass; **118 Vitest tests pass**
+(domain plus RLS/workflow tests running the real migrations in PGlite); production build passes;
+**29 Playwright + axe checks pass** on mobile and desktop; 45 legacy pytest tests pass. The
+signed-in E2E journey and the live-Supabase concurrency tests are opt-in and **were not run**
+(they need a migrated, seeded project). See [docs/level-1/TEST_PLAN.md](docs/level-1/TEST_PLAN.md).
+
+Documentation: [Setup](docs/level-1/SETUP.md) · [Architecture](docs/level-1/ARCHITECTURE.md) ·
+[Data model](docs/level-1/DATA_MODEL.md) · [Business rules](docs/level-1/BUSINESS_RULES.md) ·
+[Security](docs/level-1/SECURITY.md) · [Accessibility](docs/level-1/ACCESSIBILITY.md) ·
+[Known limitations](docs/level-1/KNOWN_LIMITATIONS.md) · [Roadmap](docs/level-1/LEVELS_ROADMAP.md)
 
 ---
 
@@ -49,7 +60,7 @@ The app opens at `http://localhost:8501` with layout=wide.
 
 ---
 
-## 2-Minute Demo Script
+## 2-Minute Demo Script (legacy Streamlit prototype)
 
 1. **Marketplace at t=0** — Show the item grid with full prices. Note the urgency badges (FRESH), watchers, and CO₂ impact on each card.
 
@@ -69,7 +80,7 @@ The app opens at `http://localhost:8501` with layout=wide.
 
 ---
 
-## Architecture
+## Legacy prototype architecture
 
 | File | Purpose |
 |---|---|
@@ -88,7 +99,10 @@ The app opens at `http://localhost:8501` with layout=wide.
 
 ---
 
-## Known Limitations
+## Legacy prototype limitations
+
+These apply to the Streamlit demo only; the web app addresses them (see docs/level-1/KNOWN_LIMITATIONS.md for its own limits).
+
 
 1. **No persistence** — all data lives in memory. Refreshing the browser tab resets state (but slider/button interactions within a session are stable).
 2. **No real payments** — wallet balances are mock.

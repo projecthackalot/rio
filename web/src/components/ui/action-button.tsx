@@ -1,0 +1,87 @@
+'use client'
+
+import { useActionState, useEffect, useRef, type ReactNode } from 'react'
+import { Button } from './button'
+import { Notice } from './feedback'
+import { SubmitButton } from './submit-button'
+import { idleState, type ActionState } from '@/lib/action-state'
+
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'clay'
+
+interface ActionButtonProps {
+  action: (prev: ActionState, formData: FormData) => Promise<ActionState>
+  label: string
+  pendingLabel?: string
+  variant?: Variant
+  size?: 'sm' | 'md' | 'lg'
+  className?: string
+  /** When set, the action only runs after the person confirms in a modal dialog. */
+  confirm?: { title: string; body: ReactNode; confirmLabel?: string }
+  children?: ReactNode // extra form fields
+}
+
+/**
+ * A Server Action behind a button, with pending state, an accessible result
+ * message (role=status / role=alert) and an optional confirmation dialog
+ * built on the native <dialog> element (focus trap, Esc to close, focus return).
+ */
+export function ActionButton({ action, label, pendingLabel, variant = 'primary', size = 'md', className, confirm, children }: ActionButtonProps) {
+  const [state, formAction] = useActionState(action, idleState)
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const openerRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (state.status !== 'idle' && dialogRef.current?.open) {
+      dialogRef.current.close()
+      openerRef.current?.focus()
+    }
+  }, [state])
+
+  const form = (
+    <form action={formAction} className="contents">
+      {children}
+      <SubmitButton
+        variant={confirm ? (variant === 'danger' ? 'danger' : 'primary') : variant}
+        size={size}
+        className={confirm ? undefined : className}
+        pendingLabel={pendingLabel}
+      >
+        {confirm?.confirmLabel ?? label}
+      </SubmitButton>
+    </form>
+  )
+
+  return (
+    <div className="space-y-3">
+      {confirm ? (
+        <>
+          <Button ref={openerRef} variant={variant} size={size} className={className} onClick={() => dialogRef.current?.showModal()}>
+            {label}
+          </Button>
+          <dialog
+            ref={dialogRef}
+            aria-labelledby={`${label}-title`}
+            className="rounded-card border-line bg-chalk text-ink backdrop:bg-ink/40 m-auto w-[min(32rem,calc(100vw-2rem))] border p-0"
+          >
+            <div className="p-6">
+              <h2 id={`${label}-title`} className="text-2xl">
+                {confirm.title}
+              </h2>
+              <div className="text-muted mt-3">{confirm.body}</div>
+              <div className="mt-6 flex flex-wrap justify-end gap-3">
+                <Button variant="secondary" onClick={() => dialogRef.current?.close()}>
+                  Go back
+                </Button>
+                {form}
+              </div>
+            </div>
+          </dialog>
+        </>
+      ) : (
+        form
+      )}
+      {state.status === 'error' && state.message && <Notice tone="error" title={state.message} />}
+      {state.status === 'success' && state.message && <Notice tone="success" title={state.message} />}
+    </div>
+  )
+}

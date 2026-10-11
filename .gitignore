@@ -8,8 +8,11 @@ __pycache__/
 # VS Code
 .vscode/
 
-# Environment
+# Environment (secrets never committed; templates are)
 .env
+.env.*
+!.env.example
+*.pem
 .venv
 env/
 venv/

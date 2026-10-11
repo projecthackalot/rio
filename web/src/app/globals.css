@@ -1,26 +1,111 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * RIO design tokens. Measured contrast (WCAG 2.2): ink/stone 13.4:1,
+ * muted/stone 5.7:1, forest/chalk 10.8:1, clay/chalk 5.7:1, clay/clay-tint
+ * 4.7:1, amber/amber-tint 5.7:1, danger/danger-tint 5.6:1. line-strong is the
+ * form-control border: 3.8:1 on chalk (non-text minimum is 3:1).
+ */
+@theme {
+  --color-stone: #eeebe3;
+  --color-chalk: #faf8f3;
+  --color-line: #d9d3c5;
+  --color-line-strong: #857d6c;
+  --color-ink: #1b2420;
+  --color-muted: #545e57;
+  --color-forest: #1f4033;
+  --color-forest-strong: #142b22;
+  --color-forest-tint: #dde6dd;
+  --color-clay: #9e4a2c;
+  --color-clay-tint: #f3e0d5;
+  --color-amber: #7a5000;
+  --color-amber-tint: #f5e6c3;
+  --color-danger: #a3271f;
+  --color-danger-tint: #f7dbd7;
+
+  --font-sans: var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-tag: 4px;
+  --radius-media: 8px;
+  --radius-card: 12px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-padding-top: 5rem;
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  body {
+    @apply bg-stone text-ink font-sans antialiased;
+    font-size: 1rem;
+    line-height: 1.55;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display text-ink font-semibold;
+    letter-spacing: -0.015em;
+    line-height: 1.1;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-forest);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: var(--color-forest-tint);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@utility tabular {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Hang-tag shape: punched hole on the left edge. */
+@utility hang-tag {
+  position: relative;
+  border-radius: var(--radius-tag);
+  padding-left: 1.5rem;
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0.55rem;
+    top: 50%;
+    width: 0.45rem;
+    height: 0.45rem;
+    margin-top: -0.225rem;
+    border-radius: 9999px;
+    background: var(--color-stone);
+    box-shadow: inset 0 0 0 1.5px var(--color-line-strong);
+  }
+}
+
+@keyframes rio-tag-drop {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(var(--drop, 0));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
