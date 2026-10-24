@@ -214,15 +214,25 @@ $$;
 -- the display name; any `role` in user metadata is ignored.
 create or replace function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path = '' as $$
-declare v_name text;
+declare
+  v_name text;
+  v_avatar text;
 begin
   v_name := left(nullif(trim(coalesce(
     new.raw_user_meta_data ->> 'full_name',
     new.raw_user_meta_data ->> 'name',
     split_part(coalesce(new.email, ''), '@', 1))), ''), 80);
 
-  insert into public.profiles (id, full_name, role) values (new.id, coalesce(v_name, 'RIO member'), 'student')
-  on conflict (id) do nothing;
+  v_avatar := nullif(trim(coalesce(
+    new.raw_user_meta_data ->> 'avatar_url',
+    new.raw_user_meta_data ->> 'picture')), '');
+
+  insert into public.profiles (id, full_name, role, avatar_url)
+  values (new.id, coalesce(v_name, 'RIO member'), 'student', v_avatar)
+  on conflict (id) do update set
+    avatar_url = coalesce(excluded.avatar_url, profiles.avatar_url),
+    full_name = case when profiles.full_name in ('RIO member', 'Student') and excluded.full_name is not null then excluded.full_name else profiles.full_name end;
+
   insert into public.profile_private (user_id) values (new.id) on conflict (user_id) do nothing;
   insert into public.wallet_accounts (user_id) values (new.id) on conflict (user_id) do nothing;
 
