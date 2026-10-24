@@ -182,3 +182,65 @@ export async function routeToStaffAction(listingId: string, _prev: ActionState, 
   revalidateTransactionViews(listingId)
   return { status: 'success', message: 'Routed to staff. The owner can now show a custody code to campus staff.' }
 }
+
+// ── Saved items ─────────────────────────────────────────────────────────
+export interface SavedState {
+  saved: boolean
+  error?: string
+}
+
+/** Toggles a saved item for the signed-in user. Signed-out visitors go to sign-in and come back. */
+export async function toggleSavedAction(listingId: string, returnTo: string, prev: SavedState, _fd: FormData): Promise<SavedState> {
+  if (!uuid.safeParse(listingId).success) return { saved: prev.saved, error: 'Invalid item.' }
+  if (!(await getViewer())) redirect(`/auth/login?next=${encodeURIComponent(returnTo)}`)
+  const supabase = await createClient()
+  const { error } = prev.saved
+    ? await supabase.from('favorites').delete().eq('listing_id', listingId)
+    : await supabase.from('favorites').insert({ listing_id: listingId })
+  // 23505: already saved (double tap) — treat as success.
+  if (error && error.code !== '23505') return { saved: prev.saved, error: 'Couldn’t update your saved items. Try again.' }
+  revalidatePath('/saved')
+  return { saved: !prev.saved }
+}
+
+// ── Trust: reports and ratings ──────────────────────────────────────────
+const REPORT_REASONS = ['prohibited', 'misleading', 'scam', 'duplicate', 'offensive', 'other'] as const
+const reportSchema = z.object({ reason: z.enum(REPORT_REASONS, { message: 'Choose a reason.' }), details: z.string().trim().max(500).optional() })
+
+export async function reportListingAction(listingId: string, _prev: ActionState, formData: FormData): Promise<ActionState> {
+  if (!uuid.safeParse(listingId).success) return fail('Invalid item.')
+  if (!(await getViewer())) redirect(`/auth/login?next=/items/${listingId}`)
+  const parsed = reportSchema.safeParse({ reason: formData.get('reason'), details: formData.get('details') || undefined })
+  if (!parsed.success) return fail('Choose a reason for the report.')
+  const { error } = await rpc('report_listing', { p_listing: listingId, p_reason: parsed.data.reason, p_details: parsed.data.details ?? null })
+  if (error) return fail(error)
+  revalidatePath('/warden')
+  return { status: 'success', message: 'Thanks. A warden for this hostel will review the listing. The seller won’t see who reported it.' }
+}
+
+export async function reviewReportAction(reportId: string, decision: 'dismiss' | 'remove', _prev: ActionState, _fd: FormData): Promise<ActionState> {
+  if (!uuid.safeParse(reportId).success) return fail('Invalid report.')
+  const { error } = await rpc('review_report', { p_report: reportId, p_action: decision })
+  if (error) return fail(error)
+  revalidatePath('/warden')
+  revalidatePath('/marketplace')
+  return { status: 'success', message: decision === 'remove' ? 'Listing removed from the marketplace.' : 'Report dismissed.' }
+}
+
+const ratingSchema = z.object({ stars: z.coerce.number().int().min(1).max(5), comment: z.string().trim().max(300).optional() })
+
+export async function rateTransactionAction(subject: { claimId?: string; rentalId?: string }, _prev: ActionState, formData: FormData): Promise<ActionState> {
+  const id = subject.claimId ?? subject.rentalId
+  if (!id || !uuid.safeParse(id).success) return fail('Invalid transaction.')
+  const parsed = ratingSchema.safeParse({ stars: formData.get('stars'), comment: formData.get('comment') || undefined })
+  if (!parsed.success) return fail('Choose between 1 and 5 stars.')
+  const { error } = await rpc('rate_transaction', {
+    p_claim: subject.claimId ?? null,
+    p_rental: subject.rentalId ?? null,
+    p_stars: parsed.data.stars,
+    p_comment: parsed.data.comment ?? null,
+  })
+  if (error) return fail(error)
+  revalidatePath('/activity')
+  return { status: 'success', message: 'Thanks for rating. It helps other students trust good sellers.' }
+}

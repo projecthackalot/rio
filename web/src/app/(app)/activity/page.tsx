@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { CheckCircle2 } from 'lucide-react'
 import { Suspense } from 'react'
 import { HandoverCodePanel } from '@/components/handover/handover-code-panel'
 import { ListingCard } from '@/components/listings/listing-card'
@@ -13,6 +14,8 @@ import { requireViewer } from '@/lib/auth/dal'
 import { getActivity, getNames, type ClaimRow, type RentalRow } from '@/lib/data/activity'
 import { getMyListings } from '@/lib/data/listings'
 import { getLedger, getWalletBalance } from '@/lib/data/wallet'
+import { getMyRatedTransactions } from '@/lib/data/trust'
+import { RatingForm } from '@/components/activity/rating-form'
 import { formatDateTime } from '@/lib/format'
 import { cancelClaimAction } from '../actions'
 import { requestNow } from '@/lib/time'
@@ -60,12 +63,13 @@ function ActivitySkeleton() {
 
 async function Activity({ searchParams }: { searchParams: SP }) {
   const viewer = await requireViewer('/activity')
-  const [sp, activity, listings, balance, ledger] = await Promise.all([
+  const [sp, activity, listings, balance, ledger, rated] = await Promise.all([
     searchParams,
     getActivity(viewer.id),
     getMyListings(viewer.id),
     getWalletBalance(),
     getLedger(100),
+    getMyRatedTransactions().catch(() => ({ claims: new Set<string>(), rentals: new Set<string>() })),
   ])
   const names = await getNames([
     ...activity.sold.map((c) => c.claimer_id),
@@ -98,7 +102,13 @@ async function Activity({ searchParams }: { searchParams: SP }) {
         ) : (
           <ul className="space-y-3">
             {activity.bought.map((c) => (
-              <ClaimItem key={c.id} claim={c} counterparty={names.get(c.listing.owner_id)} role="buyer" />
+              <ClaimItem
+                key={c.id}
+                claim={c}
+                counterparty={names.get(c.listing.owner_id)}
+                role="buyer"
+                rating={c.status !== 'COMPLETED' ? 'none' : rated.claims.has(c.id) ? 'done' : 'can'}
+              />
             ))}
           </ul>
         )}
@@ -122,7 +132,12 @@ async function Activity({ searchParams }: { searchParams: SP }) {
         ) : (
           <ul className="space-y-3">
             {activity.renting.map((r) => (
-              <RentalItem key={r.id} rental={r} label="You’re renting" />
+              <RentalItem
+                key={r.id}
+                rental={r}
+                label="You’re renting"
+                rating={r.status !== 'RETURNED' && r.status !== 'CONVERTED' ? 'none' : rated.rentals.has(r.id) ? 'done' : 'can'}
+              />
             ))}
             {activity.lending.map((r) => (
               <RentalItem key={r.id} rental={r} label={`Rented by ${names.get(r.renter_id) ?? 'a student'}`} />
@@ -249,7 +264,18 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <p className="rounded-card border-line-strong/50 text-muted border border-dashed p-5">{children}</p>
 }
 
-function ClaimItem({ claim, counterparty, role }: { claim: ClaimRow; counterparty?: string; role: 'buyer' | 'seller' }) {
+type RatingState = 'none' | 'can' | 'done'
+
+/** Persistent confirmation: the form disappears once a rating exists, so say so explicitly. */
+function RatedNote() {
+  return (
+    <p className="text-forest mt-3 flex items-center gap-1.5 text-sm font-medium">
+      <CheckCircle2 aria-hidden="true" className="size-4" /> You rated this seller. Thanks.
+    </p>
+  )
+}
+
+function ClaimItem({ claim, counterparty, role, rating = 'none' }: { claim: ClaimRow; counterparty?: string; role: 'buyer' | 'seller'; rating?: RatingState }) {
   const pending = claim.status === 'PENDING_HANDOVER'
   return (
     <li id={`claim-${claim.id}`} className="rounded-card border-line bg-chalk scroll-mt-24 border p-5">
@@ -298,13 +324,29 @@ function ClaimItem({ claim, counterparty, role }: { claim: ClaimRow; counterpart
           </div>
         </div>
       )}
+      {rating === 'can' && (
+        <div className="mt-4">
+          <RatingForm claimId={claim.id} />
+        </div>
+      )}
+      {rating === 'done' && <RatedNote />}
     </li>
   )
 }
 
-function RentalItem({ rental, label }: { rental: RentalRow; label: string }) {
+function RentalItem({ rental, label, rating = 'none' }: { rental: RentalRow; label: string; rating?: RatingState }) {
   return (
     <li className="rounded-card border-line bg-chalk flex flex-wrap items-center justify-between gap-3 border p-5">
+      {rating === 'can' && (
+        <div className="order-last w-full">
+          <RatingForm rentalId={rental.id} />
+        </div>
+      )}
+      {rating === 'done' && (
+        <div className="order-last w-full">
+          <RatedNote />
+        </div>
+      )}
       <div>
         <Link href={`/rentals/${rental.id}`} className="font-semibold hover:underline">
           {rental.listing.title}

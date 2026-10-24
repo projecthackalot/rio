@@ -37,7 +37,7 @@ export async function openDisputeAction(_prev: ActionState, formData: FormData):
   if (file instanceof File && file.size > 0) {
     const ext = EVIDENCE_TYPES[file.type]
     if (!ext) return { status: 'error', fieldErrors: { evidence: ['Attach a JPEG, PNG, WebP image or a PDF.'] }, values }
-    if (file.size > MAX_PHOTO_BYTES) return { status: 'error', fieldErrors: { evidence: ['The file must be 5 MB or smaller.'] }, values }
+    if (file.size > MAX_PHOTO_BYTES) return { status: 'error', fieldErrors: { evidence: ['The file must be 4 MB or smaller.'] }, values }
     evidencePath = `${viewer.id}/${randomUUID()}.${ext}`
     const { error } = await supabase.storage.from('dispute-evidence').upload(evidencePath, file, { contentType: file.type })
     if (error) return { status: 'error', fieldErrors: { evidence: ['The file couldn’t be uploaded. Try again or submit without it.'] }, values }

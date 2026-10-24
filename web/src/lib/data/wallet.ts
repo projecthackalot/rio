@@ -1,4 +1,5 @@
 import 'server-only'
+import { queryError } from './query-error'
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 
@@ -30,6 +31,6 @@ export async function getLedger(limit = 50): Promise<LedgerRow[]> {
     .select('id, type, amount_paise, balance_after_paise, note, listing_id, created_at')
     .order('created_at', { ascending: false })
     .limit(limit)
-  if (error) throw new Error(`ledger: ${error.code}`)
+  if (error) throw queryError('ledger', error)
   return (data ?? []).map((r) => ({ ...r, amount_paise: Number(r.amount_paise), balance_after_paise: Number(r.balance_after_paise) }))
 }

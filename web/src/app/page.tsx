@@ -1,6 +1,9 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
+import { Suspense } from 'react'
 import { QrCode, Repeat, ShieldCheck, Users } from 'lucide-react'
 import { DecayDiagram } from '@/components/marketing/decay-diagram'
+import { CategoryShortcuts, HomeSearch, LeavingSoon } from '@/components/marketing/home-sections'
 import { SiteFooter } from '@/components/shell/site-footer'
 import { SiteHeader } from '@/components/shell/site-header'
 import { buttonClass } from '@/components/ui/button'
@@ -8,6 +11,8 @@ import { CATEGORIES } from '@/domain/catalog'
 import { LOGISTICS_CO2E_PER_TRANSFER_KG } from '@/domain/impact'
 import { formatINR } from '@/domain/money'
 import { RENTAL_PERIODS, DEPOSIT_BPS, DAMAGE_DEDUCTION_BPS, RENT_TO_OWN_CREDIT_BPS } from '@/domain/rental'
+
+export const metadata: Metadata = { alternates: { canonical: '/' } }
 
 const STEPS = [
   {
@@ -41,23 +46,31 @@ export default function LandingPage() {
       <main id="main" tabIndex={-1} className="outline-none">
         <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 pt-10 pb-16 sm:px-6 md:pt-16 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:pb-24">
           <div>
-            <h1 className="text-5xl leading-[1.02] font-bold sm:text-6xl lg:text-7xl">Leaving campus? Leave your stuff for the next batch.</h1>
+            <h1 className="text-[clamp(2.4rem,9vw,4.5rem)] leading-[1.02] font-bold">Leaving campus? Leave your stuff for the next batch.</h1>
             <p className="text-muted mt-6 max-w-xl text-lg sm:text-xl">
               RIO is a move-out marketplace for hostels. Sell or rent what you can’t carry home, at a price that drops as your departure nears, and hand it over
               with a QR scan.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/marketplace" className={buttonClass('primary', 'lg')}>
-                Browse the marketplace
+            <div className="mt-8">
+              <HomeSearch />
+            </div>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link href="/marketplace" className={buttonClass('secondary', 'lg')}>
+                Browse all items
               </Link>
-              <Link href="/auth/signup" className={buttonClass('secondary', 'lg')}>
-                Create a student account
+              <Link href="/sell/new" className={buttonClass('ghost', 'lg')}>
+                List an item
               </Link>
             </div>
-            <p className="text-muted mt-5 text-sm">Pilot: all payments are simulated sandbox money.</p>
+            <p className="text-muted mt-5 text-sm">Simulated payment: no real money is transferred during the pilot.</p>
           </div>
           <DecayDiagram />
         </section>
+
+        <CategoryShortcuts />
+        <Suspense fallback={null}>
+          <LeavingSoon />
+        </Suspense>
 
         <section id="how-it-works" aria-labelledby="how-heading" className="border-line bg-chalk border-y">
           <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">

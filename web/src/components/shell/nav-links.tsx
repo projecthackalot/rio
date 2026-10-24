@@ -2,13 +2,17 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ArrowLeftRight, ClipboardList, Gavel, LayoutDashboard, PlusCircle, ScanLine, ShieldCheck, Store, Users } from 'lucide-react'
+import { ArrowLeftRight, CircleHelp, ClipboardList, Gavel, Heart, LayoutDashboard, PlusCircle, Route, ScanLine, ShieldCheck, Store, Users } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
-export type NavKey = 'marketplace' | 'dashboard' | 'sell' | 'handover' | 'activity' | 'disputes' | 'warden' | 'staff' | 'admin'
+export type NavKey =
+  'howItWorks' | 'help' | 'saved' | 'marketplace' | 'dashboard' | 'sell' | 'handover' | 'activity' | 'disputes' | 'warden' | 'staff' | 'admin'
 
 const ITEMS: Record<NavKey, { href: string; label: string; Icon: typeof Store }> = {
   marketplace: { href: '/marketplace', label: 'Marketplace', Icon: Store },
+  howItWorks: { href: '/how-it-works', label: 'How it works', Icon: Route },
+  help: { href: '/help', label: 'Help', Icon: CircleHelp },
+  saved: { href: '/saved', label: 'Saved', Icon: Heart },
   dashboard: { href: '/dashboard', label: 'Home', Icon: LayoutDashboard },
   sell: { href: '/sell/new', label: 'Sell', Icon: PlusCircle },
   handover: { href: '/handover', label: 'Handover', Icon: ScanLine },

@@ -26,11 +26,13 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
   const claims = claimsData?.claims
   if (!claims?.sub) return null
 
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from('profiles')
-    .select('id, full_name, role, hostel_id, avatar_url, hostels(name)')
+    .select('id, full_name, role, hostel_id, avatar_url, hostels:hostels!hostel_id(name)')
     .eq('id', claims.sub)
     .maybeSingle()
+  // A failed lookup must be visible in the logs: silently returning null looks like "signed out".
+  if (error) console.error('[auth:profile]', error.code, error.message.slice(0, 160))
   if (!profile) return null
 
   const hostel = profile.hostels as unknown as { name: string } | null

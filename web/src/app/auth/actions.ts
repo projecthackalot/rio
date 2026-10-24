@@ -26,9 +26,10 @@ async function siteOrigin(): Promise<string> {
   throw new Error('NEXT_PUBLIC_SITE_URL must be set to the app’s public origin (see docs/level-1/SETUP.md).')
 }
 
-function logAuthError(action: string, error: { message: string; status?: number; code?: string }) {
-  // Never log credentials or tokens — only the failure category.
-  console.error(`[auth:${action}]`, { status: error.status, code: error.code })
+function logAuthError(action: string, error: { message: string; name?: string; status?: number; code?: string }) {
+  // Never log credentials or tokens — only the failure category. `name` distinguishes a
+  // network failure (AuthRetryableFetchError, status 0) from a rejected sign-in.
+  console.error(`[auth:${action}]`, { type: error.name, status: error.status, code: error.code })
 }
 
 export async function login(_prev: ActionState, formData: FormData): Promise<ActionState> {

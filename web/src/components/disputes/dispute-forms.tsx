@@ -26,7 +26,7 @@ export function OpenDisputeForm({ claimId, rentalId }: { claimId?: string; renta
         id="evidence"
         label="Evidence"
         optional
-        hint="A photo or PDF, up to 5 MB. Only the people involved and your hostel’s warden can see it."
+        hint="A photo or PDF, up to 4 MB. Only the people involved and your hostel’s warden can see it."
         errors={state.fieldErrors?.evidence}
       >
         {(a) => <Input {...a} name="evidence" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="py-2" />}

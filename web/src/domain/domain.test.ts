@@ -270,3 +270,19 @@ describe('auth validation', async () => {
     expect(loginSchema.safeParse({ email: 'a@b.co', password: '' }).success).toBe(false)
   })
 })
+
+describe('marketplace filters', async () => {
+  const { parseFilters } = await import('@/lib/data/listings')
+  it('drops invalid values instead of trusting them', () => {
+    const f = parseFilters({ category: 'not-a-category', condition: 'mint', sort: 'random', page: '-3', min: 'abc', q: '  cooler  ' })
+    expect(f).toMatchObject({ sort: 'ending', page: 1, q: 'cooler' })
+    expect([f.category, f.condition, f.min]).toEqual([undefined, undefined, undefined])
+  })
+  it('swaps a reversed price range and flags it', () => {
+    expect(parseFilters({ min: '900', max: '200' })).toMatchObject({ min: 200, max: 900, rangeSwapped: true })
+    expect(parseFilters({ min: '200', max: '900' })).toMatchObject({ min: 200, max: 900, rangeSwapped: false })
+    const onlyMin = parseFilters({ min: '500' })
+    expect(onlyMin).toMatchObject({ min: 500, rangeSwapped: false })
+    expect(onlyMin.max).toBeUndefined()
+  })
+})

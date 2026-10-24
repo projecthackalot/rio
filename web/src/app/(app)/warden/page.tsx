@@ -13,7 +13,17 @@ import { requireViewer } from '@/lib/auth/dal'
 import { getDisputes, getNames } from '@/lib/data/activity'
 import { getDepartureQueue, getImpact, getNoDues, getScopedHostels, getStaffTransfers } from '@/lib/data/warden'
 import { formatDateTime, formatDuration } from '@/lib/format'
-import { routeToStaffAction } from '../actions'
+import { reviewReportAction, routeToStaffAction } from '../actions'
+import { getOpenReports } from '@/lib/data/trust'
+
+const REPORT_REASON_LABELS: Record<string, string> = {
+  misleading: 'Misleading photos or description',
+  scam: 'Possible scam',
+  prohibited: 'Not allowed in hostels',
+  duplicate: 'Duplicate listing',
+  offensive: 'Offensive content',
+  other: 'Other',
+}
 import { requestNow } from '@/lib/time'
 
 export const metadata: Metadata = { title: 'Warden' }
@@ -42,12 +52,13 @@ async function Warden({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams
   const hostel = hostels.find((h) => h.id === sp.hostel) ?? hostels[0]
   const now = await requestNow()
-  const [queue, transfers, disputes, impact, noDues] = await Promise.all([
+  const [queue, transfers, disputes, impact, noDues, reports] = await Promise.all([
     getDepartureQueue(hostel.id, now),
     getStaffTransfers([hostel.id]),
     getDisputes({ status: 'OPEN', hostelIds: [hostel.id] }),
     getImpact(hostel.id),
     getNoDues(hostel.id),
+    getOpenReports([hostel.id]),
   ])
   const names = await getNames([...queue.map((q) => q.owner_id), ...transfers.map((t) => t.owner_id)])
   const routable = queue.filter((q) => isStaffRoutable(new Date(q.departure_at), now))
@@ -144,6 +155,36 @@ async function Warden({ searchParams }: { searchParams: SP }) {
               ))}
             </ul>
           </details>
+        )}
+      </section>
+
+      <section aria-labelledby="reports-heading">
+        <h2 id="reports-heading" className="text-2xl">
+          Reported listings
+        </h2>
+        <p className="text-muted mt-1 text-sm">Students flagged these. Reporters stay anonymous to sellers. Removing takes the listing off the marketplace.</p>
+        {reports.length === 0 ? (
+          <p className="text-muted mt-4">No open reports.</p>
+        ) : (
+          <ul className="divide-line rounded-card border-line bg-chalk mt-4 divide-y border">
+            {reports.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-start justify-between gap-3 p-4">
+                <div className="min-w-0">
+                  <Link href={`/items/${r.listing.id}`} className="font-semibold hover:underline">
+                    {r.listing.title}
+                  </Link>
+                  <p className="text-muted text-sm">
+                    {REPORT_REASON_LABELS[r.reason] ?? r.reason}, reported {formatDateTime(r.created_at)}
+                  </p>
+                  {r.details && <p className="mt-1 text-sm">“{r.details}”</p>}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <ActionButton action={reviewReportAction.bind(null, r.id, 'remove')} label="Remove listing" variant="danger" size="sm" />
+                  <ActionButton action={reviewReportAction.bind(null, r.id, 'dismiss')} label="Dismiss" variant="ghost" size="sm" />
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

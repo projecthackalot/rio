@@ -1,4 +1,5 @@
 import 'server-only'
+import { queryError } from './query-error'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { CATEGORIES, CONDITION_KEYS, type Condition } from '@/domain/catalog'
@@ -37,9 +38,17 @@ export const marketplaceFiltersSchema = z.object({
 })
 export type MarketplaceFilters = z.infer<typeof marketplaceFiltersSchema>
 
-export function parseFilters(params: Record<string, string | string[] | undefined>): MarketplaceFilters {
+export type ParsedFilters = MarketplaceFilters & { rangeSwapped: boolean }
+
+/**
+ * Validates the query string. A reversed price range (min above max) is
+ * corrected by swapping, and flagged so the page can say so.
+ */
+export function parseFilters(params: Record<string, string | string[] | undefined>): ParsedFilters {
   const flat = Object.fromEntries(Object.entries(params).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]))
-  return marketplaceFiltersSchema.parse(flat)
+  const f = marketplaceFiltersSchema.parse(flat)
+  if (f.min !== undefined && f.max !== undefined && f.min > f.max) return { ...f, min: f.max, max: f.min, rangeSwapped: true }
+  return { ...f, rangeSwapped: false }
 }
 
 export interface ListingCard {
@@ -58,10 +67,12 @@ export interface ListingCard {
   hostel_name: string | null
   cover_path: string | null
   cover_alt: string | null
+  /** Small (~480 px) version for cards; null for photos uploaded before thumbnails existed. */
+  cover_thumb_path: string | null
 }
 
 const CARD_COLUMNS =
-  'id, title, status, condition, is_rentable, category_slug, category_name, start_price_paise, floor_price_paise, current_price_paise, listed_at, departure_at, hostel_name, cover_path, cover_alt'
+  'id, title, status, condition, is_rentable, category_slug, category_name, start_price_paise, floor_price_paise, current_price_paise, listed_at, departure_at, hostel_name, cover_path, cover_alt, cover_thumb_path'
 
 function normaliseCard(r: Record<string, unknown>): ListingCard {
   return {
@@ -112,7 +123,7 @@ export async function getMarketplace(filters: MarketplaceFilters, now: number) {
   if (error) {
     // PGRST103: requested page is past the end — treat as empty rather than failing.
     if (error.code === 'PGRST103') return { items: [] as ListingCard[], total: count ?? 0 }
-    throw new Error(`marketplace query failed: ${error.code ?? 'unknown'}`)
+    throw queryError('marketplace', error)
   }
   return { items: (data ?? []).map(normaliseCard), total: count ?? 0 }
 }
@@ -120,7 +131,7 @@ export async function getMarketplace(filters: MarketplaceFilters, now: number) {
 export async function getMyListings(ownerId: string) {
   const supabase = await createClient()
   const { data, error } = await supabase.from('listing_cards').select(CARD_COLUMNS).eq('owner_id', ownerId).order('created_at', { ascending: false }).limit(50)
-  if (error) throw new Error(`my listings: ${error.code}`)
+  if (error) throw queryError('my listings', error)
   return (data ?? []).map(normaliseCard)
 }
 
@@ -140,7 +151,7 @@ export interface ListingDetail {
   hostel_id: string | null
   category: { name: string; embodied_co2e_kg: number; tare_kg: number; volume_m3: number }
   hostel: { name: string } | null
-  media: { id: string; storage_path: string; alt_text: string; position: number }[]
+  media: { id: string; storage_path: string; thumb_path: string | null; alt_text: string; position: number }[]
 }
 
 export async function getListing(id: string): Promise<ListingDetail | null> {
@@ -151,13 +162,13 @@ export async function getListing(id: string): Promise<ListingDetail | null> {
     .select(
       `id, owner_id, title, description, status, condition, is_rentable, category_slug, start_price_paise, floor_price_paise,
        listed_at, departure_at, hostel_id,
-       category:categories(name, embodied_co2e_kg, tare_kg, volume_m3),
-       hostel:hostels(name),
-       media:listing_media(id, storage_path, alt_text, position)`,
+       category:categories!category_slug(name, embodied_co2e_kg, tare_kg, volume_m3),
+       hostel:hostels!hostel_id(name),
+       media:listing_media!listing_id(id, storage_path, thumb_path, alt_text, position)`,
     )
     .eq('id', id)
     .maybeSingle()
-  if (error) throw new Error(`listing: ${error.code}`)
+  if (error) throw queryError('listing', error)
   if (!data) return null
   const d = data as unknown as ListingDetail
   return {
@@ -181,4 +192,26 @@ export async function getOwnerName(ownerId: string): Promise<string | null> {
   if (!data) return null
   const [first, ...rest] = data.full_name.trim().split(/\s+/)
   return rest.length ? `${first} ${rest[rest.length - 1][0]}.` : first
+}
+
+/** Which of the given listings the signed-in viewer has saved (one query; empty for signed-out visitors). */
+export async function getSavedIds(listingIds: string[]): Promise<Set<string>> {
+  if (!listingIds.length) return new Set()
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('favorites').select('listing_id').in('listing_id', listingIds)
+  if (error) return new Set() // anonymous visitors have no access: nothing is saved
+  return new Set((data ?? []).map((r) => r.listing_id as string))
+}
+
+/** The viewer's saved listings, newest save first. Listings that are no longer visible to them drop out. */
+export async function getSavedListings(): Promise<ListingCard[]> {
+  const supabase = await createClient()
+  const { data: favs, error } = await supabase.from('favorites').select('listing_id, created_at').order('created_at', { ascending: false }).limit(100)
+  if (error) throw queryError('saved', error)
+  const ids = (favs ?? []).map((f) => f.listing_id as string)
+  if (!ids.length) return []
+  const { data, error: e2 } = await supabase.from('listing_cards').select(CARD_COLUMNS).in('id', ids)
+  if (e2) throw queryError('saved listings', e2)
+  const byId = new Map((data ?? []).map((r) => [r.id as string, normaliseCard(r)]))
+  return ids.map((id) => byId.get(id)).filter((c): c is ListingCard => Boolean(c))
 }

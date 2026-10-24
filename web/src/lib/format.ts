@@ -48,3 +48,12 @@ export function fromISTLocalInput(value: string): Date | null {
   const d = new Date(`${value}:00+05:30`)
   return Number.isNaN(d.getTime()) ? null : d
 }
+
+/** Formats byte counts into human-readable strings, e.g. "1.2 MB". */
+export function formatBytes(bytes: number): string {
+  if (bytes <= 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.min(sizes.length - 1, Math.floor(Math.log(bytes) / Math.log(k)))
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
+}

@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { ChevronDown, LogOut, Settings } from 'lucide-react'
+import { ChevronDown, Heart, LogOut, Settings } from 'lucide-react'
 import { Logo } from '@/components/brand/logo'
 import { ButtonLink } from '@/components/ui/button'
 import { NavLinks, TabBar, type NavKey } from './nav-links'
@@ -10,13 +10,13 @@ import { formatINR } from '@/domain/money'
 import { logout } from '@/app/auth/actions'
 
 export function navFor(viewer: Viewer | null): { desktop: NavKey[]; mobile: NavKey[] } {
-  if (!viewer) return { desktop: ['marketplace'], mobile: [] }
+  if (!viewer) return { desktop: ['marketplace', 'howItWorks', 'help'], mobile: ['marketplace', 'howItWorks', 'help'] }
   if (viewer.role === 'admin')
     return { desktop: ['marketplace', 'warden', 'staff', 'disputes', 'admin'], mobile: ['marketplace', 'warden', 'handover', 'admin'] }
   if (viewer.role === 'warden') return { desktop: ['warden', 'marketplace', 'handover', 'disputes'], mobile: ['warden', 'marketplace', 'handover', 'disputes'] }
   if (viewer.role === 'staff') return { desktop: ['staff', 'handover', 'marketplace'], mobile: ['staff', 'handover', 'marketplace'] }
   return {
-    desktop: ['dashboard', 'marketplace', 'sell', 'handover', 'activity'],
+    desktop: ['dashboard', 'marketplace', 'sell', 'saved', 'handover', 'activity'],
     mobile: ['dashboard', 'marketplace', 'sell', 'handover', 'activity'],
   }
 }
@@ -90,9 +90,14 @@ function HeaderBody({ viewer, balance }: { viewer: Viewer | null; balance: numbe
             )}
             <details className="group relative">
               <summary className="border-line bg-chalk flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-full border py-1 pr-3 pl-1 text-sm font-medium [&::-webkit-details-marker]:hidden">
-                <span aria-hidden="true" className="bg-forest text-chalk flex size-8 items-center justify-center rounded-full">
-                  {viewer.fullName.slice(0, 1).toUpperCase()}
-                </span>
+                {viewer.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={viewer.avatarUrl} alt="" className="size-8 rounded-full object-cover" />
+                ) : (
+                  <span aria-hidden="true" className="bg-forest text-chalk flex size-8 items-center justify-center rounded-full">
+                    {viewer.fullName.slice(0, 1).toUpperCase()}
+                  </span>
+                )}
                 <span className="max-w-32 truncate">{viewer.fullName}</span>
                 <ChevronDown aria-hidden="true" className="size-4 transition-transform group-open:rotate-180" />
                 <span className="sr-only">Account menu</span>
@@ -110,6 +115,9 @@ function HeaderBody({ viewer, balance }: { viewer: Viewer | null; balance: numbe
                     </p>
                   )}
                 </div>
+                <Link href="/saved" className="hover:bg-stone flex min-h-11 items-center gap-2 rounded-md px-3 text-sm">
+                  <Heart aria-hidden="true" className="size-4" /> Saved items
+                </Link>
                 <Link href="/settings" className="hover:bg-stone flex min-h-11 items-center gap-2 rounded-md px-3 text-sm">
                   <Settings aria-hidden="true" className="size-4" /> Account settings
                 </Link>

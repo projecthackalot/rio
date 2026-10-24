@@ -1,4 +1,5 @@
 import 'server-only'
+import { queryError } from './query-error'
 import { createClient } from '@/lib/supabase/server'
 import type { ClaimStatus, DisputeStatus, ListingStatus, RentalStatus, StaffTransferStatus } from '@/domain/stateMachine'
 import type { RentalPeriod } from '@/domain/rental'
@@ -88,8 +89,8 @@ function normRental(r: Record<string, unknown>): RentalRow {
   return { ...x, listing: normListing(x.listing) }
 }
 
-const CLAIM_COLS = `id, status, amount_paise, claimed_at, completed_at, claimer_id, listing:listings!inner(${LISTING_REF})`
-const RENTAL_COLS = `id, status, period, rent_paise, deposit_paise, booked_at, picked_up_at, due_at, returned_at, damage_deduction_paise, converted_price_paise, renter_id, listing:listings!inner(${LISTING_REF})`
+const CLAIM_COLS = `id, status, amount_paise, claimed_at, completed_at, claimer_id, listing:listings!listing_id!inner(${LISTING_REF})`
+const RENTAL_COLS = `id, status, period, rent_paise, deposit_paise, booked_at, picked_up_at, due_at, returned_at, damage_deduction_paise, converted_price_paise, renter_id, listing:listings!listing_id!inner(${LISTING_REF})`
 
 /** Everything the viewer is involved in, as buyer/renter and as owner — 5 queries, run in parallel. */
 export async function getActivity(userId: string) {
@@ -101,12 +102,12 @@ export async function getActivity(userId: string) {
     supabase.from('rentals').select(RENTAL_COLS).eq('listing.owner_id', userId).order('booked_at', { ascending: false }).limit(50),
     supabase
       .from('staff_transfers')
-      .select('id, status, routed_at, accepted_at, owner_id, hostel_id, listing:listings!inner(id, title, category_slug, departure_at)')
+      .select('id, status, routed_at, accepted_at, owner_id, hostel_id, listing:listings!listing_id!inner(id, title, category_slug, departure_at)')
       .eq('owner_id', userId)
       .order('routed_at', { ascending: false })
       .limit(20),
   ])
-  for (const r of [bought, sold, renting, lending, transfers]) if (r.error) throw new Error(`activity: ${r.error.code}`)
+  for (const r of [bought, sold, renting, lending, transfers]) if (r.error) throw queryError('activity', r.error)
   return {
     bought: (bought.data ?? []).map(normClaim),
     sold: (sold.data ?? []).map(normClaim),
@@ -119,7 +120,7 @@ export async function getActivity(userId: string) {
 export async function getRental(id: string): Promise<RentalRow | null> {
   const supabase = await createClient()
   const { data, error } = await supabase.from('rentals').select(RENTAL_COLS).eq('id', id).maybeSingle()
-  if (error) throw new Error(`rental: ${error.code}`)
+  if (error) throw queryError('rental', error)
   return data ? normRental(data) : null
 }
 
@@ -139,7 +140,7 @@ export async function getMyInvolvement(listingId: string, userId: string) {
 }
 
 const DISPUTE_COLS =
-  'id, status, reason, evidence_path, resolution_note, created_at, resolved_at, reporter_id, claim_id, rental_id, item_returned, prev_subject_status, deduction_paise, listing:listings!inner(id, title, owner_id, hostel_id)'
+  'id, status, reason, evidence_path, resolution_note, created_at, resolved_at, reporter_id, claim_id, rental_id, item_returned, prev_subject_status, deduction_paise, listing:listings!listing_id!inner(id, title, owner_id, hostel_id)'
 
 export async function getDisputes(opts: { status?: 'OPEN' | 'CLOSED'; hostelIds?: string[] } = {}) {
   const supabase = await createClient()
@@ -148,14 +149,14 @@ export async function getDisputes(opts: { status?: 'OPEN' | 'CLOSED'; hostelIds?
   if (opts.status === 'CLOSED') q = q.neq('status', 'OPEN')
   if (opts.hostelIds?.length) q = q.in('listing.hostel_id', opts.hostelIds)
   const { data, error } = await q
-  if (error) throw new Error(`disputes: ${error.code}`)
+  if (error) throw queryError('disputes', error)
   return (data ?? []).map((d) => num(d as Record<string, unknown>, ['deduction_paise']) as unknown as DisputeRow)
 }
 
 export async function getDispute(id: string) {
   const supabase = await createClient()
   const { data, error } = await supabase.from('disputes').select(DISPUTE_COLS).eq('id', id).maybeSingle()
-  if (error) throw new Error(`dispute: ${error.code}`)
+  if (error) throw queryError('dispute', error)
   return data ? (num(data as Record<string, unknown>, ['deduction_paise']) as unknown as DisputeRow) : null
 }
 

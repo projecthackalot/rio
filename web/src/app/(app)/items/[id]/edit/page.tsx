@@ -58,7 +58,7 @@ async function Edit({ params, searchParams }: { params: Params; searchParams: SP
             {listing.media.map((m) => (
               <li key={m.id} className="space-y-2">
                 <div className="rounded-media bg-forest-tint relative aspect-square overflow-hidden">
-                  <Image src={listingMediaUrl(m.storage_path)} alt={m.alt_text} fill sizes="200px" className="object-cover" />
+                  <Image src={listingMediaUrl(m.thumb_path ?? m.storage_path)} alt={m.alt_text} fill unoptimized className="object-cover" />
                 </div>
                 {editable && <ActionButton action={deletePhotoAction.bind(null, listing.id, m.id)} label="Remove photo" variant="ghost" size="sm" />}
               </li>

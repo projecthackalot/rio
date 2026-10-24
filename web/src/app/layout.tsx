@@ -1,15 +1,19 @@
 import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
 import './globals.css'
+import { SITE, siteUrl } from '@/lib/site'
 
 // Self-hosted variable fonts (SIL Open Font License, see ./fonts) — no build-time network dependency.
 const bricolage = localFont({ src: './fonts/bricolage-grotesque-latin-wght-normal.woff2', variable: '--font-bricolage', weight: '200 800', display: 'swap' })
 const instrument = localFont({ src: './fonts/instrument-sans-latin-wght-normal.woff2', variable: '--font-instrument', weight: '400 700', display: 'swap' })
 
 export const metadata: Metadata = {
-  title: { default: 'RIO · Hostel move-out marketplace', template: '%s · RIO' },
-  description:
-    'Sell, rent or hand over your hostel essentials before you leave campus. Prices drop as your departure nears; whatever is left goes to campus staff, not the bin.',
+  metadataBase: new URL(siteUrl()),
+  title: { default: `${SITE.name} · ${SITE.tagline}`, template: `%s · ${SITE.name}` },
+  description: SITE.description,
+  applicationName: SITE.name,
+  openGraph: { type: 'website', siteName: SITE.name, title: `${SITE.name} · ${SITE.tagline}`, description: SITE.description, locale: 'en_IN' },
+  twitter: { card: 'summary', title: `${SITE.name} · ${SITE.tagline}`, description: SITE.description },
 }
 
 export const viewport: Viewport = {

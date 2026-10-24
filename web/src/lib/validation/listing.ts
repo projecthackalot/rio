@@ -3,7 +3,13 @@ import { CATEGORIES, CONDITION_KEYS, type Condition } from '@/domain/catalog'
 import { fromISTLocalInput } from '@/lib/format'
 
 export const MAX_PHOTOS = 5
-export const MAX_PHOTO_BYTES = 5 * 1024 * 1024
+/**
+ * Per-save upload budget. Serverless hosts cap a request body at about 4.5 MB
+ * (Vercel), and photos travel through a Server Action, so one save may carry
+ * at most 4 MB of files in total.
+ */
+export const MAX_PHOTO_BYTES = 4 * 1024 * 1024
+export const MAX_UPLOAD_LABEL = '4 MB'
 export const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'] as const
 
 const rupees = (label: string) =>
@@ -69,7 +75,7 @@ export const EXTENSIONS: Record<(typeof PHOTO_TYPES)[number], string> = {
 /** Checks declared type, size and the file's magic bytes (a renamed .exe is rejected). */
 export async function validatePhoto(file: File): Promise<string | null> {
   if (!(PHOTO_TYPES as readonly string[]).includes(file.type)) return `“${file.name}” isn’t a JPEG, PNG, WebP or AVIF image.`
-  if (file.size > MAX_PHOTO_BYTES) return `“${file.name}” is larger than 5 MB.`
+  if (file.size > MAX_PHOTO_BYTES) return `“${file.name}” is larger than ${MAX_UPLOAD_LABEL}.`
   const head = new Uint8Array(await file.slice(0, 16).arrayBuffer())
   if (!SIGNATURES[file.type as (typeof PHOTO_TYPES)[number]](head)) return `“${file.name}” doesn’t look like a valid ${file.type} file.`
   return null

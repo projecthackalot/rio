@@ -1,4 +1,5 @@
 import 'server-only'
+import { queryError } from './query-error'
 import { createClient } from '@/lib/supabase/server'
 import type { Viewer } from '@/lib/auth/dal'
 
@@ -17,16 +18,16 @@ export async function getScopedHostels(viewer: Viewer): Promise<Hostel[]> {
     ids = (data ?? []).map((r) => r.hostel_id)
     if (!ids.length) return []
   }
-  let q = supabase.from('hostels').select('id, name, campus:campuses(name)').order('name')
+  let q = supabase.from('hostels').select('id, name, campus:campuses!campus_id(name)').order('name')
   if (ids) q = q.in('id', ids)
   const { data, error } = await q
-  if (error) throw new Error(`hostels: ${error.code}`)
+  if (error) throw queryError('hostels', error)
   return (data ?? []).map((h) => ({ id: h.id, name: h.name, campus: (h.campus as unknown as { name: string } | null)?.name ?? '' }))
 }
 
 export async function getAllHostels(): Promise<Hostel[]> {
   const supabase = await createClient()
-  const { data } = await supabase.from('hostels').select('id, name, campus:campuses(name)').order('name')
+  const { data } = await supabase.from('hostels').select('id, name, campus:campuses!campus_id(name)').order('name')
   return (data ?? []).map((h) => ({ id: h.id, name: h.name, campus: (h.campus as unknown as { name: string } | null)?.name ?? '' }))
 }
 
@@ -51,7 +52,7 @@ export async function getDepartureQueue(hostelId: string, now: number, withinHou
     .lte('departure_at', new Date(now + withinHours * 3_600_000).toISOString())
     .order('departure_at')
     .limit(100)
-  if (error) throw new Error(`queue: ${error.code}`)
+  if (error) throw queryError('queue', error)
   return (data ?? []) as QueueItem[]
 }
 
@@ -60,11 +61,11 @@ export async function getStaffTransfers(hostelIds: string[]) {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('staff_transfers')
-    .select('id, status, routed_at, accepted_at, owner_id, accepted_by, hostel_id, listing:listings!inner(id, title, category_slug)')
+    .select('id, status, routed_at, accepted_at, owner_id, accepted_by, hostel_id, listing:listings!listing_id!inner(id, title, category_slug)')
     .in('hostel_id', hostelIds)
     .order('routed_at', { ascending: false })
     .limit(100)
-  if (error) throw new Error(`transfers: ${error.code}`)
+  if (error) throw queryError('transfers', error)
   return (data ?? []) as unknown as {
     id: string
     status: 'PENDING' | 'ACCEPTED'

@@ -3,7 +3,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
-import { ChevronLeft, Leaf, MapPin } from 'lucide-react'
+import { ChevronLeft, Leaf, MapPin, Star } from 'lucide-react'
 import { CategoryArt } from '@/components/brand/category-art'
 import { PriceTag } from '@/components/brand/price-tag'
 import { ActionButton } from '@/components/ui/action-button'
@@ -23,16 +23,41 @@ import {
 } from '@/domain/pricing'
 import { DAMAGE_DEDUCTION_BPS, RENTAL_PERIODS, RENTAL_PERIOD_KEYS, RENT_TO_OWN_CREDIT_BPS, canRentBeforeDeparture, quoteRental } from '@/domain/rental'
 import { getViewer, hasRole, type Viewer } from '@/lib/auth/dal'
+import { isFrameworkError } from '@/lib/errors'
+import { DataUnavailable } from '@/components/ui/data-unavailable'
 import { getMyInvolvement } from '@/lib/data/activity'
-import { getListing, getOwnerName, type ListingDetail } from '@/lib/data/listings'
+import { getListing, getOwnerName, getSavedIds, type ListingDetail } from '@/lib/data/listings'
+import { SaveButton } from '@/components/listings/save-button'
+import { ShareButton } from '@/components/listings/share-button'
+import { getSellerRating } from '@/lib/data/trust'
 import { listingMediaUrl } from '@/lib/env'
 import { formatDateTime, formatTime } from '@/lib/format'
-import { claimListingAction, routeToStaffAction, setAvailabilityAction, startRentalAction } from '../../actions'
+import { claimListingAction, reportListingAction, routeToStaffAction, setAvailabilityAction, startRentalAction } from '../../actions'
 import { requestNow } from '@/lib/time'
 
 type Params = Promise<{ id: string }>
 
-export const metadata: Metadata = { title: 'Item' }
+/** Per-listing title/description for shared links. Only public-safe fields; non-active listings are not indexed. */
+export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+  const { id } = await params
+  const listing = await getListing(id).catch(() => null)
+  if (!listing) return { title: 'Item not found', robots: { index: false } }
+  const description = `${listing.category.name} in ${CONDITIONS[listing.condition].label.toLowerCase()} condition${listing.hostel ? ` at ${listing.hostel.name}` : ''}. ${
+    listing.description?.slice(0, 120) ?? 'Listed on RIO, the hostel move-out marketplace.'
+  }`
+  return {
+    title: listing.title,
+    description,
+    alternates: { canonical: `/items/${listing.id}` },
+    robots: listing.status === 'ACTIVE' ? undefined : { index: false },
+    openGraph: {
+      title: listing.title,
+      description,
+      type: 'website',
+      images: listing.media[0] ? [{ url: listingMediaUrl(listing.media[0].storage_path), alt: listing.media[0].alt_text }] : undefined,
+    },
+  }
+}
 
 export default function ItemPage({ params }: { params: Params }) {
   return (
@@ -57,12 +82,22 @@ function ItemSkeleton() {
 
 async function Item({ params }: { params: Params }) {
   const { id } = await params
-  const [listing, viewer] = await Promise.all([getListing(id), getViewer()])
+  let listing: ListingDetail | null
+  let viewer: Viewer | null
+  try {
+    ;[listing, viewer] = await Promise.all([getListing(id), getViewer()])
+  } catch (error) {
+    if (isFrameworkError(error)) throw error
+    console.error('[item]', error instanceof Error ? error.message : 'load failed')
+    return <DataUnavailable title="This item couldn’t be loaded" retryHref={`/items/${id}`} />
+  }
   if (!listing) notFound()
   const now = await requestNow()
-  const [ownerName, involvement] = await Promise.all([
+  const [ownerName, involvement, savedIds, rating] = await Promise.all([
     viewer ? getOwnerName(listing.owner_id) : Promise.resolve(null),
     viewer ? getMyInvolvement(listing.id, viewer.id) : Promise.resolve(null),
+    viewer ? getSavedIds([listing.id]) : Promise.resolve(new Set<string>()),
+    getSellerRating(listing.owner_id).catch(() => null), // a rating outage must not break the item page
   ])
 
   const dep = listing.departure_at ? new Date(listing.departure_at).getTime() : null
@@ -97,6 +132,14 @@ async function Item({ params }: { params: Params }) {
                 </span>
               )}
               {ownerName && <span>Listed by {isOwner ? 'you' : ownerName}</span>}
+              {rating && (
+                <span className="inline-flex items-center gap-1">
+                  <Star aria-hidden="true" className="size-4" />
+                  {rating.ratings
+                    ? `Seller rated ${rating.average} out of 5 (${rating.ratings} rating${rating.ratings === 1 ? '' : 's'})`
+                    : 'Seller has no ratings yet'}
+                </span>
+              )}
             </p>
           </div>
 
@@ -112,6 +155,63 @@ async function Item({ params }: { params: Params }) {
           <p className="text-muted -mt-3 text-sm">Price as of {formatTime(now)}. The exact price is fixed by the server at the moment you claim.</p>
 
           <ActionsPanel listing={listing} viewer={viewer} now={now} currentPaise={current} involvement={involvement} />
+          <div className="flex flex-wrap items-start gap-3">
+            {!isOwner && (
+              <SaveButton
+                listingId={listing.id}
+                title={listing.title}
+                initialSaved={savedIds.has(listing.id)}
+                returnTo={`/items/${listing.id}`}
+                variant="labelled"
+              />
+            )}
+            <ShareButton path={`/items/${listing.id}`} title={listing.title} />
+            {viewer && !isOwner && (
+              <ActionButton
+                action={reportListingAction.bind(null, listing.id)}
+                label="Report listing"
+                variant="ghost"
+                confirm={{
+                  title: 'Report this listing',
+                  confirmLabel: 'Send report',
+                  body: 'A warden for this hostel reviews every report. The seller won’t see who reported it.',
+                }}
+              >
+                <div className="w-full space-y-3 text-left">
+                  <label className="text-ink block text-sm font-medium" htmlFor="report-reason">
+                    Reason
+                  </label>
+                  <select
+                    id="report-reason"
+                    name="reason"
+                    required
+                    defaultValue=""
+                    className="border-line-strong bg-chalk text-ink min-h-11 w-full rounded-lg border px-3"
+                  >
+                    <option value="" disabled>
+                      Choose a reason
+                    </option>
+                    <option value="misleading">Photos or description are misleading</option>
+                    <option value="scam">Looks like a scam</option>
+                    <option value="prohibited">Item isn’t allowed in hostels</option>
+                    <option value="duplicate">Duplicate listing</option>
+                    <option value="offensive">Offensive content</option>
+                    <option value="other">Something else</option>
+                  </select>
+                  <label className="text-ink block text-sm font-medium" htmlFor="report-details">
+                    Details <span className="text-muted font-normal">(optional)</span>
+                  </label>
+                  <textarea
+                    id="report-details"
+                    name="details"
+                    maxLength={500}
+                    rows={3}
+                    className="border-line-strong bg-chalk text-ink w-full rounded-lg border px-3 py-2"
+                  />
+                </div>
+              </ActionButton>
+            )}
+          </div>
 
           <Timeline listing={listing} />
         </div>
@@ -144,13 +244,13 @@ function Gallery({ listing }: { listing: ListingDetail }) {
   return (
     <div className="space-y-3">
       <div className="rounded-card bg-forest-tint relative aspect-[4/3] overflow-hidden">
-        <Image src={listingMediaUrl(first.storage_path)} alt={first.alt_text} fill priority sizes="(min-width: 1024px) 55vw, 100vw" className="object-cover" />
+        <Image src={listingMediaUrl(first.storage_path)} alt={first.alt_text} fill priority unoptimized className="object-cover" />
       </div>
       {rest.length > 0 && (
         <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4">
           {rest.map((m) => (
             <li key={m.id} className="rounded-media bg-forest-tint relative aspect-square overflow-hidden">
-              <Image src={listingMediaUrl(m.storage_path)} alt={m.alt_text} fill sizes="(min-width: 1024px) 14vw, 30vw" className="object-cover" />
+              <Image src={listingMediaUrl(m.thumb_path ?? m.storage_path)} alt={m.alt_text} fill unoptimized className="object-cover" />
             </li>
           ))}
         </ul>

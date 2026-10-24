@@ -1,23 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-
-/** Route prefixes that require a signed-in user. Everything else is public. */
-export const PROTECTED_PREFIXES = [
-  '/dashboard',
-  '/sell',
-  '/activity',
-  '/rentals',
-  '/handover',
-  '/disputes',
-  '/warden',
-  '/staff',
-  '/admin',
-  '/settings',
-] as const
-
-export function isProtectedPath(pathname: string): boolean {
-  return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`)) || /^\/items\/[^/]+\/edit$/.test(pathname)
-}
+import { isProtectedPath } from '@/lib/auth/route-policy'
 
 /**
  * Refreshes the Supabase session cookie on every request and bounces

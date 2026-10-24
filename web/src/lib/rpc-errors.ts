@@ -37,6 +37,9 @@ const MESSAGES: Record<string, string> = {
   DEPARTURE_TOO_FAR: 'Departure must be within the next year.',
   WALLET_MISSING: 'Your sandbox wallet isn’t set up. Please contact a warden.',
   INVALID_INPUT: 'Some of the information provided isn’t valid.',
+  ALREADY_REPORTED: 'You’ve already reported this listing. A warden will review it.',
+  NOT_RATEABLE: 'You can rate a seller after a completed purchase or a returned rental.',
+  ALREADY_RATED: 'You’ve already rated this transaction.',
 }
 
 export const GENERIC_ERROR = 'Something went wrong. Please try again.'

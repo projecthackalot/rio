@@ -9,6 +9,7 @@ import { formatINR } from '@/domain/money'
 import { RENTAL_PERIODS, RENTAL_PERIOD_KEYS, quoteRental } from '@/domain/rental'
 import { idleState, type ActionState } from '@/lib/action-state'
 import { MAX_PHOTOS } from '@/lib/validation/listing'
+import { PhotoUploader } from './photo-uploader'
 
 export interface ListingDefaults {
   title?: string
@@ -174,29 +175,10 @@ export function ListingForm({
         )}
       </fieldset>
 
-      <fieldset className="space-y-5">
+      <fieldset className="space-y-4">
         <legend className="font-display text-2xl font-semibold">Photos</legend>
         {remainingSlots > 0 ? (
-          <>
-            <Field
-              id="photos"
-              label={`Add photos (up to ${remainingSlots})`}
-              optional
-              hint="JPEG, PNG, WebP or AVIF, 5 MB each. Photograph the actual item."
-              errors={fe.photos}
-            >
-              {(a) => <Input {...a} name="photos" type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple className="py-2" />}
-            </Field>
-            <Field
-              id="photoAlt"
-              label="Describe the photos"
-              optional
-              hint="For people using screen readers, e.g. “White air cooler with water tank removed”."
-              errors={fe.photoAlt}
-            >
-              {(a) => <Input {...a} name="photoAlt" maxLength={200} defaultValue={String(v.photoAlt ?? '')} />}
-            </Field>
-          </>
+          <PhotoUploader remainingSlots={remainingSlots} errors={fe.photos} defaultValueAlt={String(v.photoAlt ?? '')} />
         ) : (
           <p className="text-muted text-sm">You’ve added the maximum of {MAX_PHOTOS} photos. Remove one to add another.</p>
         )}

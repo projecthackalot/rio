@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useEffect, useRef, type ReactNode } from 'react'
+import { useActionState, useEffect, useId, useRef, type ReactNode } from 'react'
 import { Button } from './button'
 import { Notice } from './feedback'
 import { SubmitButton } from './submit-button'
@@ -28,6 +28,8 @@ interface ActionButtonProps {
 export function ActionButton({ action, label, pendingLabel, variant = 'primary', size = 'md', className, confirm, children }: ActionButtonProps) {
   const [state, formAction] = useActionState(action, idleState)
   const dialogRef = useRef<HTMLDialogElement>(null)
+  // Button labels contain spaces, which are invalid in ids: derive a stable id instead.
+  const titleId = useId()
   const openerRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -37,18 +39,15 @@ export function ActionButton({ action, label, pendingLabel, variant = 'primary',
     }
   }, [state])
 
-  const form = (
-    <form action={formAction} className="contents">
-      {children}
-      <SubmitButton
-        variant={confirm ? (variant === 'danger' ? 'danger' : 'primary') : variant}
-        size={size}
-        className={confirm ? undefined : className}
-        pendingLabel={pendingLabel}
-      >
-        {confirm?.confirmLabel ?? label}
-      </SubmitButton>
-    </form>
+  const submit = (
+    <SubmitButton
+      variant={confirm ? (variant === 'danger' ? 'danger' : 'primary') : variant}
+      size={size}
+      className={confirm ? undefined : className}
+      pendingLabel={pendingLabel}
+    >
+      {confirm?.confirmLabel ?? label}
+    </SubmitButton>
   )
 
   return (
@@ -60,25 +59,30 @@ export function ActionButton({ action, label, pendingLabel, variant = 'primary',
           </Button>
           <dialog
             ref={dialogRef}
-            aria-labelledby={`${label}-title`}
+            aria-labelledby={titleId}
             className="rounded-card border-line bg-chalk text-ink backdrop:bg-ink/40 m-auto w-[min(32rem,calc(100vw-2rem))] border p-0"
           >
-            <div className="p-6">
-              <h2 id={`${label}-title`} className="text-2xl">
+            {/* Extra fields (children) sit above the buttons, inside the same form. */}
+            <form action={formAction} className="space-y-4 p-6">
+              <h2 id={titleId} className="text-2xl">
                 {confirm.title}
               </h2>
-              <div className="text-muted mt-3">{confirm.body}</div>
-              <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <div className="text-muted">{confirm.body}</div>
+              {children}
+              <div className="flex flex-wrap justify-end gap-3 pt-2">
                 <Button variant="secondary" onClick={() => dialogRef.current?.close()}>
                   Go back
                 </Button>
-                {form}
+                {submit}
               </div>
-            </div>
+            </form>
           </dialog>
         </>
       ) : (
-        form
+        <form action={formAction} className="contents">
+          {children}
+          {submit}
+        </form>
       )}
       {state.status === 'error' && state.message && <Notice tone="error" title={state.message} />}
       {state.status === 'success' && state.message && <Notice tone="success" title={state.message} />}

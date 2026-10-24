@@ -8,33 +8,62 @@ import { createClient } from '@/lib/supabase/server'
 import { getViewer } from '@/lib/auth/dal'
 import { echoValues, fromZodError, type ActionState } from '@/lib/action-state'
 import { rpcErrorMessage } from '@/lib/rpc-errors'
-import { EXTENSIONS, MAX_PHOTOS, listingSchema, validatePhoto } from '@/lib/validation/listing'
+import { EXTENSIONS, MAX_PHOTOS, MAX_PHOTO_BYTES, MAX_UPLOAD_LABEL, listingSchema, validatePhoto } from '@/lib/validation/listing'
 
 type Supabase = Awaited<ReturnType<typeof createClient>>
 
-function photosFrom(formData: FormData): File[] {
-  return formData.getAll('photos').filter((f): f is File => f instanceof File && f.size > 0)
+function filesFrom(formData: FormData, name: 'photos' | 'thumbs'): File[] {
+  return formData.getAll(name).filter((f): f is File => f instanceof File && f.size > 0)
 }
 
+/** Full-size photos paired with their thumbnails (sent by the browser in matching order). */
+function photosFrom(formData: FormData): { full: File; thumb: File | null }[] {
+  const full = filesFrom(formData, 'photos')
+  const thumbs = filesFrom(formData, 'thumbs')
+  return full.map((f, i) => ({ full: f, thumb: thumbs.length === full.length ? thumbs[i] : null }))
+}
+
+const ext = (file: File) => EXTENSIONS[file.type as keyof typeof EXTENSIONS]
+
 /** Uploads with the user's own session: storage RLS confines writes to `<uid>/…`. */
-async function uploadPhotos(supabase: Supabase, userId: string, listingId: string, files: File[], alt: string, title: string, startPosition: number) {
+async function uploadPhotos(
+  supabase: Supabase,
+  userId: string,
+  listingId: string,
+  photos: { full: File; thumb: File | null }[],
+  alt: string,
+  title: string,
+  startPosition: number,
+) {
   const errors: string[] = []
   let position = startPosition
-  for (const file of files) {
-    const path = `${userId}/${listingId}/${randomUUID()}.${EXTENSIONS[file.type as keyof typeof EXTENSIONS]}`
-    const { error: upErr } = await supabase.storage.from('listing-media').upload(path, file, { contentType: file.type, upsert: false })
+  const bucket = supabase.storage.from('listing-media')
+  for (const { full, thumb } of photos) {
+    const id = randomUUID()
+    const path = `${userId}/${listingId}/${id}.${ext(full)}`
+    const thumbPath = thumb ? `${userId}/${listingId}/${id}-thumb.${ext(thumb)}` : null
+    const { error: upErr } = await bucket.upload(path, full, { contentType: full.type, upsert: false, cacheControl: '31536000' })
     if (upErr) {
       console.error('[listing:upload]', upErr.message.slice(0, 120))
-      errors.push(`“${file.name}” couldn’t be uploaded.`)
+      errors.push(`“${full.name}” couldn’t be uploaded.`)
       continue
     }
-    const altText = (alt || title).slice(0, 180) + (files.length > 1 ? ` (photo ${position + 1})` : '')
-    const { error: rowErr } = await supabase
-      .from('listing_media')
-      .insert({ listing_id: listingId, storage_path: path, alt_text: altText.length >= 3 ? altText : `${title} photo`, position })
+    if (thumb && thumbPath) {
+      const { error: thumbErr } = await bucket.upload(thumbPath, thumb, { contentType: thumb.type, upsert: false, cacheControl: '31536000' })
+      if (thumbErr) console.error('[listing:upload-thumb]', thumbErr.message.slice(0, 120)) // cards fall back to the full image
+    }
+    const altText = (alt || title).slice(0, 180) + (photos.length > 1 ? ` (photo ${position + 1})` : '')
+    const { error: rowErr } = await supabase.from('listing_media').insert({
+      listing_id: listingId,
+      storage_path: path,
+      thumb_path: thumbPath,
+      alt_text: altText.length >= 3 ? altText : `${title} photo`,
+      position,
+    })
     if (rowErr) {
-      await supabase.storage.from('listing-media').remove([path])
-      errors.push(`“${file.name}” couldn’t be attached.`)
+      console.error('[listing:attach]', rowErr.code, rowErr.message.slice(0, 120))
+      await bucket.remove([path, ...(thumbPath ? [thumbPath] : [])])
+      errors.push(`“${full.name}” couldn’t be attached.`)
       continue
     }
     position++
@@ -42,8 +71,11 @@ async function uploadPhotos(supabase: Supabase, userId: string, listingId: strin
   return errors
 }
 
-async function checkPhotos(files: File[], existing = 0): Promise<string | null> {
-  if (files.length + existing > MAX_PHOTOS) return `You can add up to ${MAX_PHOTOS} photos.`
+async function checkPhotos(photos: { full: File; thumb: File | null }[], existing = 0): Promise<string | null> {
+  if (photos.length + existing > MAX_PHOTOS) return `You can add up to ${MAX_PHOTOS} photos.`
+  const files = photos.flatMap((p) => (p.thumb ? [p.full, p.thumb] : [p.full]))
+  const total = files.reduce((sum, f) => sum + f.size, 0)
+  if (total > MAX_PHOTO_BYTES) return `These photos add up to more than ${MAX_UPLOAD_LABEL}. Add one or two now, save, then add the rest.`
   for (const f of files) {
     const problem = await validatePhoto(f)
     if (problem) return problem
@@ -55,7 +87,7 @@ export async function createListingAction(_prev: ActionState, formData: FormData
   const viewer = await getViewer()
   if (!viewer) redirect('/auth/login?next=/sell/new')
   const values = echoValues(formData)
-  const parsed = listingSchema.safeParse(Object.fromEntries([...formData.entries()].filter(([k]) => k !== 'photos')))
+  const parsed = listingSchema.safeParse(Object.fromEntries([...formData.entries()].filter(([k]) => k !== 'photos' && k !== 'thumbs')))
   if (!parsed.success) return fromZodError(parsed.error, values)
   const files = photosFrom(formData)
   const photoProblem = await checkPhotos(files)
@@ -79,7 +111,7 @@ export async function updateListingAction(listingId: string, _prev: ActionState,
   const viewer = await getViewer()
   if (!viewer) redirect(`/auth/login?next=/items/${listingId}/edit`)
   const values = echoValues(formData)
-  const parsed = listingSchema.safeParse(Object.fromEntries([...formData.entries()].filter(([k]) => k !== 'photos')))
+  const parsed = listingSchema.safeParse(Object.fromEntries([...formData.entries()].filter(([k]) => k !== 'photos' && k !== 'thumbs')))
   if (!parsed.success) return fromZodError(parsed.error, values)
 
   const supabase = await createClient()
@@ -108,9 +140,9 @@ export async function updateListingAction(listingId: string, _prev: ActionState,
 export async function deletePhotoAction(listingId: string, mediaId: string, _prev: ActionState, _fd: FormData): Promise<ActionState> {
   if (!z.uuid().safeParse(mediaId).success) return { status: 'error', message: 'Invalid photo.' }
   const supabase = await createClient()
-  const { data, error } = await supabase.from('listing_media').delete().eq('id', mediaId).select('storage_path')
+  const { data, error } = await supabase.from('listing_media').delete().eq('id', mediaId).select('storage_path, thumb_path')
   if (error || !data?.length) return { status: 'error', message: 'That photo can’t be removed.' }
-  await supabase.storage.from('listing-media').remove(data.map((d) => d.storage_path))
+  await supabase.storage.from('listing-media').remove(data.flatMap((d) => [d.storage_path, d.thumb_path].filter((p): p is string => Boolean(p))))
   revalidatePath(`/items/${listingId}`)
   revalidatePath(`/items/${listingId}/edit`)
   return { status: 'success', message: 'Photo removed.' }

@@ -52,10 +52,15 @@ const PATHS: Record<string, React.ReactNode> = {
   ),
 }
 
-export function CategoryArt({ slug, label, className }: { slug: string; label: string; className?: string }) {
+/** `decorative` hides the drawing from assistive tech when adjacent text already names the category. */
+export function CategoryArt({ slug, label, className, decorative = false }: { slug: string; label: string; className?: string; decorative?: boolean }) {
   return (
     <div className={cn('bg-forest-tint flex items-center justify-center', className)}>
-      <svg viewBox="0 0 120 92" role="img" aria-label={`Illustration: ${label} (no photo yet)`} className="h-3/5 max-h-40 w-3/5">
+      <svg
+        viewBox="0 0 120 92"
+        {...(decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': `Illustration: ${label} (no photo yet)` })}
+        className="h-3/5 max-h-40 w-3/5"
+      >
         <g fill="none" stroke="var(--color-forest)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
           {PATHS[slug] ?? PATHS.other}
         </g>
