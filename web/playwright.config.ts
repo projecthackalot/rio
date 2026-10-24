@@ -11,6 +11,9 @@ const PORT = Number(process.env.E2E_PORT ?? 3100)
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
+  // The signed-in journey talks to a free-tier hosted database: keep concurrency low so
+  // results reflect the app, not rate limits.
+  workers: process.env.E2E_FULL ? 2 : undefined,
   retries: process.env.CI ? 1 : 0,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {

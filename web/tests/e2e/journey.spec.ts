@@ -22,9 +22,12 @@ async function signedIn(browser: Browser, email: string) {
 
 test.describe('signed-in journey', () => {
   test.skip(!full, 'set E2E_FULL=1 with a migrated, seeded Supabase project')
+  test.setTimeout(90_000) // several real round-trips to the hosted database
 
-  test('seller lists, buyer claims, handover settles in sandbox money', async ({ browser }) => {
-    const title = `E2E lamp ${Date.now()}`
+  test('seller lists, buyer claims, handover settles in sandbox money', async ({ browser }, info) => {
+    // Projects run in parallel against the same database: unique title and a different buyer per project.
+    const title = `E2E lamp ${info.project.name} ${Date.now()}`
+    const buyerEmail = info.project.name === 'mobile' ? 'zoya.demo@rio.test' : 'rohan.demo@rio.test'
     const seller = await signedIn(browser, 'priya.demo@rio.test')
     await seller.goto('/sell/new')
     await seller.getByLabel('Title').fill(title)
@@ -36,15 +39,16 @@ test.describe('signed-in journey', () => {
     await expect(seller.getByText('Your listing is live on the marketplace.')).toBeVisible()
     const itemUrl = seller.url().replace(/\/edit.*$/, '')
 
-    const buyer = await signedIn(browser, 'rohan.demo@rio.test')
+    const buyer = await signedIn(browser, buyerEmail)
     await buyer.goto(itemUrl)
     await buyer.getByRole('button', { name: /Claim for ₹300/ }).click()
     await buyer.getByRole('dialog').getByRole('button', { name: 'Claim and hold payment' }).click()
     await expect(buyer.getByText('Claimed. Payment is held in sandbox escrow.')).toBeVisible()
 
     await seller.goto('/activity#selling')
-    await seller.getByRole('button', { name: 'Show handover code' }).first().click()
-    const code = (await seller.locator('p[aria-label^="Code:"]').first().textContent())!.trim()
+    const sale = seller.locator('li', { hasText: title })
+    await sale.getByRole('button', { name: 'Show handover code' }).click()
+    const code = (await sale.locator('p[aria-label^="Code:"]').textContent())!.trim()
 
     await buyer.goto('/handover')
     await buyer.getByLabel('Handover code').fill(code)
@@ -57,7 +61,9 @@ test.describe('signed-in journey', () => {
     await buyer.getByRole('button', { name: 'Confirm handover' }).click()
     await expect(buyer.getByText('That handover code has already been used.')).toBeVisible()
 
-    await expect(seller.getByText('Scanned and confirmed. This handover is complete.')).toBeVisible({ timeout: 15_000 })
+    // The seller's screen polls for the scan, then refreshes: the lasting signal is the Completed status
+    // (the brief "Scanned and confirmed" message is replaced by it).
+    await expect(sale.getByText('Completed')).toBeVisible({ timeout: 20_000 })
   })
 
   test('warden sees the hostel overview', async ({ browser }) => {

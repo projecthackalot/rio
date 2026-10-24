@@ -12,8 +12,9 @@ test.describe('public pages', () => {
     await page.goto('/')
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Leaving campus?')
     await expect(page.getByRole('img', { name: 'Example price over two days' })).toBeVisible()
-    await expect(page.getByText('Pilot: all payments are simulated sandbox money.')).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Browse the marketplace' })).toHaveAttribute('href', '/marketplace')
+    await expect(page.getByText('Simulated payment: no real money is transferred during the pilot.')).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Browse all items' })).toHaveAttribute('href', '/marketplace')
+    await expect(page.getByRole('heading', { name: 'Browse by category' })).toBeVisible()
     await expectNoAxeViolations(page)
     await page.screenshot({ path: `test-results/screens/landing-${info.project.name}.png`, fullPage: true })
   })
@@ -80,7 +81,7 @@ test.describe('auth screens', () => {
 })
 
 test.describe('access control', () => {
-  for (const path of ['/dashboard', '/activity', '/sell/new', '/handover', '/warden', '/admin/roles', '/settings']) {
+  for (const path of ['/dashboard', '/activity', '/sell/new', '/saved', '/handover', '/warden', '/admin/roles', '/settings']) {
     test(`${path} redirects signed-out visitors to sign in and back`, async ({ page }) => {
       await page.goto(path)
       await expect(page).toHaveURL(new RegExp(`/auth/login\\?next=${encodeURIComponent(path).replace(/%2F/g, '(%2F|/)')}`))
@@ -92,4 +93,80 @@ test.describe('access control', () => {
     const hidden = page.locator('input[name="next"]').first()
     await expect(hidden).toHaveValue('/dashboard')
   })
+})
+
+const CONTENT_PAGES: [string, string][] = [
+  ['/how-it-works', 'How RIO works'],
+  ['/about', 'About RIO'],
+  ['/campus-impact', 'Campus impact'],
+  ['/trust-and-safety', 'Trust and safety'],
+  ['/help', 'Help and FAQ'],
+  ['/contact', 'Contact'],
+  ['/privacy', 'Privacy'],
+  ['/terms', 'Terms and listing policy'],
+  ['/accessibility', 'Accessibility'],
+]
+
+test.describe('public browsing (no account)', () => {
+  test('the marketplace opens for anonymous visitors instead of redirecting to sign-in', async ({ page }) => {
+    await page.goto('/marketplace')
+    await expect(page).toHaveURL(/\/marketplace$/)
+    await expect(page.getByRole('heading', { level: 1, name: 'Marketplace' })).toBeVisible()
+  })
+
+  test('home search lands on the marketplace with the query in the URL', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('searchbox', { name: 'Search items' }).fill('cooler')
+    await page.getByRole('button', { name: 'Search' }).click()
+    await expect(page).toHaveURL(/\/marketplace\?q=cooler$/)
+  })
+
+  for (const [path, heading] of CONTENT_PAGES) {
+    test(`${path} renders and passes axe`, async ({ page }) => {
+      const res = await page.goto(path)
+      expect(res?.status()).toBe(200)
+      await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible()
+      await expectNoAxeViolations(page)
+    })
+  }
+
+  test('every footer link resolves to a real page', async ({ page, request }) => {
+    await page.goto('/')
+    const hrefs = await page.locator('footer a').evaluateAll((as) => as.map((a) => (a as HTMLAnchorElement).getAttribute('href')!))
+    expect(hrefs.length).toBeGreaterThan(8)
+    for (const href of new Set(hrefs)) {
+      const res = await request.get(href, { maxRedirects: 0 })
+      // Public pages answer 200; pages that need an account answer with a redirect to sign-in.
+      expect([200, 307], `${href} → ${res.status()}`).toContain(res.status())
+    }
+  })
+
+  test('sitemap and robots are served', async ({ request }) => {
+    const sitemap = await request.get('/sitemap.xml')
+    expect(sitemap.status()).toBe(200)
+    const xml = await sitemap.text()
+    for (const [path] of CONTENT_PAGES) expect(xml).toContain(path)
+    expect(xml).not.toContain('/dashboard')
+    const robots = await (await request.get('/robots.txt')).text()
+    expect(robots).toContain('Disallow: /admin')
+    expect(robots).toContain('Sitemap:')
+  })
+})
+
+test.describe('small phones', () => {
+  for (const width of [320, 360]) {
+    test(`no sideways scrolling at ${width}px`, async ({ browser }, info) => {
+      test.skip(info.project.name !== 'mobile', 'phone widths are checked once')
+      const context = await browser.newContext({ viewport: { width, height: 720 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true })
+      const page = await context.newPage()
+      for (const path of ['/', '/marketplace', '/how-it-works', '/campus-impact', '/help', '/terms', '/auth/login', '/auth/signup']) {
+        await page.goto(path)
+        const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+        expect(overflow, `${path} overflows by ${overflow}px at ${width}px`).toBeLessThanOrEqual(0)
+      }
+      await page.goto('/')
+      await page.screenshot({ path: `test-results/screens/landing-${width}.png`, fullPage: true })
+      await context.close()
+    })
+  }
 })

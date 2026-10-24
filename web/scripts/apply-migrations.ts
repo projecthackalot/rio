@@ -14,18 +14,11 @@
  *
  * Never logs the connection string.
  */
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { Client } from 'pg'
+import { connectDb, loadLocalEnv } from './lib/env'
 
-function loadEnvFile(path: string) {
-  if (!existsSync(path)) return
-  for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
-    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/)
-    if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^['"]|['"]$/g, '')
-  }
-}
-loadEnvFile('.env.local')
+loadLocalEnv()
 
 const args = process.argv.slice(2)
 const dryRun = args.includes('--dry-run')
@@ -43,21 +36,7 @@ const files = readdirSync(dir)
   .sort()
 
 async function main() {
-  // TLS is always verified. Supabase signs database certificates with its own root CA:
-  // download it (Dashboard → Database → Settings → SSL → Download certificate) and set
-  // SUPABASE_DB_CA_CERT to its path if verification against the system CAs fails.
-  const caPath = process.env.SUPABASE_DB_CA_CERT
-  const ssl = caPath ? { ca: readFileSync(caPath, 'utf8'), rejectUnauthorized: true } : { rejectUnauthorized: true }
-  const client = new Client({ connectionString: dbUrl, ssl, statement_timeout: 120_000 })
-  try {
-    await client.connect()
-  } catch (error) {
-    const msg = (error as Error).message
-    if (/certificate|self[- ]signed|unable to verify/i.test(msg)) {
-      throw new Error(`TLS verification failed (${msg}). Download the Supabase CA certificate and set SUPABASE_DB_CA_CERT=<path> in .env.local.`)
-    }
-    throw error
-  }
+  const client = await connectDb() // TLS-verified; failures come back as actionable messages
   try {
     await client.query(`create schema if not exists supabase_migrations;
       create table if not exists supabase_migrations.schema_migrations (version text primary key, statements text[], name text)`)

@@ -17,12 +17,17 @@ const nextConfig: NextConfig = {
   images: {
     // Listing photos are served from the public `listing-media` Supabase Storage bucket only.
     remotePatterns: supabaseUrl ? [new URL(`${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/listing-media/**`)] : [],
-    formats: ['image/avif', 'image/webp'],
+    // Free-tier budget: every (image × width × format) is one billed transformation.
+    // One format, a short width ladder and a 31-day cache keep the count low.
+    formats: ['image/webp'],
+    deviceSizes: [360, 640, 828, 1200],
+    imageSizes: [96, 200, 320],
+    minimumCacheTTL: 2678400,
   },
   experimental: {
     serverActions: {
-      // Listing photos (≤ 5 MB each, enforced again by the storage bucket).
-      bodySizeLimit: '6mb',
+      // One save carries at most 4 MB of photos (hosting request limit is ~4.5 MB).
+      bodySizeLimit: '5mb',
     },
   },
   async headers() {

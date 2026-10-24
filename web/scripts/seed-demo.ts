@@ -14,17 +14,10 @@
  * Listings have no photos (cards show category illustrations) — upload real
  * photos through the app.
  */
-import { readFileSync, existsSync } from 'node:fs'
+import { connectDb, loadLocalEnv } from './lib/env'
 import { createClient } from '@supabase/supabase-js'
 
-function loadEnvFile(path: string) {
-  if (!existsSync(path)) return
-  for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
-    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/)
-    if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^['"]|['"]$/g, '')
-  }
-}
-loadEnvFile('.env.local')
+loadLocalEnv()
 
 function fail(msg: string): never {
   console.error(`seed-demo: ${msg}`)
@@ -169,6 +162,60 @@ const LISTINGS = [
   },
 ] as const
 
+/**
+ * `--refresh`: demo times are relative to when the seed first ran, so after a
+ * while every departure has passed. This moves listed/departure times of demo
+ * listings that are not in a transaction back to "now + the original offsets",
+ * and withdraws listings left behind by automated test runs.
+ */
+async function refreshDemo(ids: Record<string, string>) {
+  for (const l of LISTINGS) {
+    const { data, error } = await db
+      .from('listings')
+      .update({ listed_at: iso(-l.listedAgo), departure_at: l.departsIn === null ? null : iso(l.departsIn), status: 'ACTIVE' })
+      .eq('owner_id', ids[l.owner])
+      .eq('title', l.title)
+      .in('status', ['ACTIVE', 'WITHDRAWN'])
+      .select('id')
+    if (error) fail(`refresh ${l.title}: ${error.message}`)
+    console.log(`seed-demo: refreshed ${l.title} (${data?.length ?? 0})`)
+  }
+  const { data: leftovers, error } = await db
+    .from('listings')
+    .update({ status: 'WITHDRAWN' })
+    .eq('status', 'ACTIVE')
+    .or('title.like.E2E %,title.like.Selenium %,title.like.Race test %')
+    .select('id')
+  if (error) fail(`withdraw test listings: ${error.message}`)
+  console.log(`seed-demo: withdrew ${leftovers?.length ?? 0} leftover test listings`)
+
+  // Top demo students' sandbox wallets back up to the opening ₹3,000 (tests spend it).
+  if (!process.env.SUPABASE_DB_URL) {
+    console.log('seed-demo: SUPABASE_DB_URL not set, skipping wallet top-up')
+    return
+  }
+  const pg = await connectDb(30_000)
+  try {
+    const students = PEOPLE.filter((p) => p.role === 'student').map((p) => ids[p.key])
+    const { rows } = await pg.query<{ user_id: string; balance_paise: string }>(
+      'select user_id, balance_paise::text from public.wallet_accounts where user_id = any($1::uuid[])',
+      [students],
+    )
+    for (const r of rows) {
+      const shortfall = 300_000 - Number(r.balance_paise)
+      if (shortfall <= 0) continue
+      await pg.query(`select private.post_ledger($1, 'DEMO_TOPUP', $2, $3, p_note => 'Demo wallet top-up (sandbox, not real money)')`, [
+        r.user_id,
+        shortfall,
+        `demo-topup:${r.user_id}:${Date.now()}`,
+      ])
+      console.log(`seed-demo: topped up a demo wallet by ₹${shortfall / 100}`)
+    }
+  } finally {
+    await pg.end()
+  }
+}
+
 async function main() {
   console.log('seed-demo: sandbox data only — no real money, no real people.')
   const hostels = await ensureHostels()
@@ -212,6 +259,8 @@ async function main() {
     const { error } = await db.from('listings').insert(rows)
     if (error) fail(`listings for ${owner}: ${error.message}`)
   }
+
+  if (process.argv.includes('--refresh')) await refreshDemo(ids)
 
   console.log('seed-demo: done. Demo accounts (password = RIO_DEMO_PASSWORD):')
   for (const p of PEOPLE) console.log(`  ${p.role.padEnd(7)} ${p.email}`)
