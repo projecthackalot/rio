@@ -48,6 +48,14 @@ describe('listing reports', () => {
     )
   })
 
+  it('listings hidden from the reporter look the same as missing ones (no existence oracle)', async () => {
+    const id = await listing('Hidden lamp')
+    await admin(db, `update public.listings set status = 'WITHDRAWN' where id = $1`, [id])
+    await rejects(rpc(u.other, `select public.report_listing($1, 'scam') v`, [id]), 'RIO_NOT_FOUND')
+    await rejects(rpc(u.other, `select public.report_listing(gen_random_uuid(), 'scam') v`), 'RIO_NOT_FOUND')
+    await rejects(rpc(u.seller, `select public.report_listing($1, 'scam') v`, [id]), 'RIO_OWN_LISTING')
+  })
+
   it('only a scoped, uninvolved warden can act; removing withdraws the listing and closes its reports', async () => {
     const id = await listing('Fake cooler')
     const r1 = await rpc<string>(u.buyer, `select public.report_listing($1, 'scam') v`, [id])

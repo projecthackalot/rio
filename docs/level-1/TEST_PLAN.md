@@ -36,7 +36,7 @@ Node 25.2.1, Chrome via Selenium Manager), dated 2026-10-23, on **Next.js 16.4.2
 - The original 19 prototype-API tests (`src/lib/engine.test.ts`) still pass through the
   compatibility layer.
 
-## 2. Database tests: `tests/db/*.db.test.ts` (53 tests, PGlite)
+## 2. Database tests: `tests/db/*.db.test.ts` (54 tests, PGlite)
 
 Includes `thumbnails.db.test.ts` (thumbnail path rules) and `trust.db.test.ts` (reports, ratings, warden scope).
 
