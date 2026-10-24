@@ -57,7 +57,7 @@ The QR payload holds only `RIO:<code>`, no personal data.
 
 ## Uploads
 
-Photos are checked in the Server Action (declared type, ≤ 5 MB, **magic bytes**) and again
+Photos are checked in the Server Action (declared type, ≤ 4 MB per save, **magic bytes**) and again
 by the bucket's MIME and size limits. Object paths are server-generated UUIDs inside the
 uploader's folder.
 

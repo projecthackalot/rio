@@ -1,19 +1,21 @@
 # Test plan and results
 
 Run from `web/` unless noted. Results below are from the last local run (Windows 11,
-Node 25.2.1), dated 2026-10-10.
+Node 25.2.1, Chrome via Selenium Manager), dated 2026-10-23, on **Next.js 16.4.2**.
 
 | Command | What it covers | Last result |
 |---|---|---|
 | `npm run format:check` | Prettier | pass |
 | `npm run lint` | ESLint (Next core-web-vitals, TypeScript, React hooks purity) | pass, 0 problems |
 | `npm run typecheck` | `tsc --noEmit` (strict) | pass |
-| `npm test` | All Vitest suites below | **118 passed, 5 skipped** (opt-in live suite) |
-| `npm run build` | Production build (28 routes, Partial Prerendering) | pass |
-| `npm run test:e2e` | Playwright on Pixel 7 + desktop Chrome, with axe | **29 passed, 5 skipped** (opt-in journey; keyboard test on desktop only) |
+| `npm test` | Domain, route policy, database (PGlite) suites | **165 passed, 5 skipped** (the live suite skips unless `RIO_LIVE_TESTS` is set) |
+| `npm run build` | Production build (41 routes, Partial Prerendering) | pass |
+| `npm run test:e2e` | Playwright on Pixel 7 + desktop Chrome, with axe | **59 passed, 7 skipped** |
+| `npm run test:selenium` | Selenium WebDriver (headless Chrome) | **41 passed, 1 skipped** against the live project (signed-in journeys skip without `RIO_DEMO_PASSWORD`) |
+| `npm run doctor` | Live connection check | **fails: Supabase project paused** (DNS for the project no longer resolves) |
 | `pytest tests` (repo root) | Legacy Streamlit engine | **45 passed** |
 
-## 1. Domain unit tests: `src/**/*.test.ts` (80 tests)
+## 1. Domain unit tests: `src/**/*.test.ts` (112 tests)
 
 - Money: half-up rounding (vs banker's), basis points, INR formatting, rejection of
   non-integer paise.
@@ -27,10 +29,16 @@ Node 25.2.1), dated 2026-10-10.
 - State machines: happy paths and 9 illegal transitions.
 - Handover codes: Crockford normalization, rejection of foreign QR payloads.
 - `safeNext` open-redirect cases; Zod signup ignores `role`.
+- **Route policy matrix** (`src/lib/auth/route-policy.test.ts`): every public page, item pages and auth
+  routes are open to anonymous visitors; each protected prefix maps to the access it needs; look-alike
+  paths aren't matched by accident.
+- Marketplace filters: invalid values are dropped; a reversed price range is swapped and flagged.
 - The original 19 prototype-API tests (`src/lib/engine.test.ts`) still pass through the
   compatibility layer.
 
-## 2. Database tests: `tests/db/rio.db.test.ts` (38 tests, PGlite)
+## 2. Database tests: `tests/db/*.db.test.ts` (53 tests, PGlite)
+
+Includes `thumbnails.db.test.ts` (thumbnail path rules) and `trust.db.test.ts` (reports, ratings, warden scope).
 
 Every migration (the two originals plus five new) runs in Postgres 18 (PGlite) on top of
 `tests/db/supabase-shim.sql`, which reproduces Supabase's `auth.uid()`, roles, storage
@@ -65,10 +73,34 @@ JWT claims, just as PostgREST runs them.
 - **Staff transfers:** not routable early; only scoped wardens can route; can't be routed
   twice; custody is accepted by scoped staff only and can't be accepted twice.
   Impact and no-dues reports are scoped.
+- **Saved items** (`favorites.db.test.ts`): private per user (hidden from other students and the seller),
+  can't be created for someone else, for a listing the user can't see, or anonymously.
+- **Backfill** (`backfill.db.test.ts`): an account that pre-dates the new schema gets a student profile,
+  wallet and opening credit, ignoring any role in its metadata.
 - **Ledger integrity:** every wallet balance equals the sum of its ledger entries, and
   every entry is sandbox.
 
 Limitation: PGlite uses a single connection. True parallelism is covered by the live suite.
+
+## 2b. Selenium WebDriver: `tests/selenium/` (`npm run test:selenium`)
+
+Runs real headless Chrome through WebDriver against the production build (started
+automatically on port 3400). Every page load also fails the test on **browser console errors or
+failed network requests**, so broken connections can't pass silently.
+
+- `public.test.ts` (35 tests, always run): all 15 public and auth pages render their heading with
+  no console/connection errors; every footer link opens a real page; 404 page; skip link moves
+  focus; home search lands on the marketplace with the query; the marketplace shows listings
+  when the database is up and an honest inline error (never a crash page) when it is down;
+  reversed price range is corrected; category chips filter; sign-up validates on the server and
+  has no role selector; wrong credentials give a generic message even with the backend down;
+  eight protected routes redirect to sign-in with `next`; open redirects refused; no sideways
+  scrolling at 320 and 360 px and the phone navigation bar is present.
+- `journey.test.ts` (5 tests, need the live backend + `RIO_DEMO_PASSWORD`): two browser
+  sessions act as seller and buyer. Purchase: list → save (persists to Saved page) → claim →
+  seller reveals code → buyer enters it → settles once → reuse rejected → seller sees
+  Completed. Rental: book → pickup by code → return by code → deposit refunded. Warden overview
+  loads with no console errors. A student is refused warden and admin screens.
 
 ## 3. Live integration: `tests/integration/live.test.ts` (opt-in, not run)
 
@@ -79,10 +111,12 @@ exactly one winner**, and private evidence listing.
 
 ## 4. End-to-end: `tests/e2e/`
 
-- `public.spec.ts` (runs by default): landing content and axe; skip link; 404 status, page
+- `public.spec.ts` (runs by default): **anonymous marketplace access (no redirect)**; home search →
+  marketplace URL; nine public content pages render with axe; every footer link resolves; sitemap and
+  robots; **no sideways scrolling at 320 and 360 px** on eight pages. Also: landing content and axe; skip link; 404 status, page
   and axe; security headers; sign-in options and axe; **signup server-side validation with
   no role selector**, `aria-invalid`, value retention and axe; reset, magic-link,
-  check-email and auth-error pages with axe; seven protected routes redirect to sign-in
+  check-email and auth-error pages with axe; eight protected routes redirect to sign-in
   with `next`; the open-redirect guard. Screenshots are saved to `test-results/screens/`.
 - `journey.spec.ts` (opt-in: `E2E_FULL=1`, seeded project): seller lists → buyer claims →
   seller shows code → buyer enters code → settled. Code reuse is rejected. The seller's

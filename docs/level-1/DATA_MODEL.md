@@ -20,6 +20,9 @@ Source of truth: `web/supabase/migrations/`. All money columns are `bigint` pais
 | `handover_tokens` | Single-use QR codes | `token_hash` (SHA-256) unique, `expires_at`, `consumed_at`, `revoked_at`. Clients can't read the hash. |
 | `disputes` | Problems with a claim or rental | exactly one subject. One open dispute per claim or rental. |
 | `staff_transfers` | Final-hour routing to staff | `UNIQUE(listing_id)`. Acceptance fields must match the status. |
+| `listing_reports` | Reports on listings | one open report per person per listing; visible to the reporter and scoped wardens, never to the seller |
+| `seller_ratings` | 1–5 stars after a completed purchase or returned rental | unique per transaction; rater hidden from everyone |
+| `favorites` | Saved items | PK (user, listing). Readable and removable only by the saver; no counts exposed. |
 | `audit_events` | Role changes and every state-changing RPC | readable by admins and scoped wardens |
 | `legacy_ledger` | The prototype's ledger, kept read-only | no client access |
 
@@ -54,5 +57,5 @@ Policy helpers: `my_role`, `is_admin`, `has_hostel_scope`, `is_listing_counterpa
 
 | Bucket | Visibility | Write | Read |
 |---|---|---|---|
-| `listing-media` | public | own `<uid>/` folder, JPEG/PNG/WebP/AVIF, ≤ 5 MB | anyone |
-| `dispute-evidence` | private | own `<uid>/` folder, images or PDF, ≤ 5 MB | uploader, the other party, scoped wardens (5-minute signed URLs) |
+| `listing-media` | public | own `<uid>/` folder, JPEG/PNG/WebP/AVIF, bucket cap 5 MB (app allows 4 MB per save) | anyone |
+| `dispute-evidence` | private | own `<uid>/` folder, images or PDF, bucket cap 5 MB (app allows 4 MB) | uploader, the other party, scoped wardens (5-minute signed URLs) |

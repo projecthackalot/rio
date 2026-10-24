@@ -26,8 +26,8 @@ Browser ── proxy.ts (refresh session cookie, bounce signed-out users from pr
 ```
 
 - **No service-role key at request time.** Every read and write runs as the signed-in user,
-  so RLS and the RPCs' own checks always apply. `lib/supabase/admin.ts` exists only for
-  operator tooling. The demo seed script creates its own client.
+  so RLS and the RPCs' own checks always apply. There is no service-role client anywhere in
+  `src/`; only the operator scripts in `scripts/` (seed, migrate, doctor) use privileged access.
 - **Authorization happens three times:** an optimistic redirect in `proxy.ts`, a role check
   in the DAL/page, and the authoritative check in Postgres (RLS, column grants, and checks
   inside each RPC).

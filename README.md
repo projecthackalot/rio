@@ -7,6 +7,8 @@ Nothing moves. Nothing gets dumped.
 
 ---
 
+**Reviewing this project? Start with [EVALUATION.md](EVALUATION.md).**
+
 ## Web application (primary): `web/`
 
 Next.js 16 + React 19 + TypeScript + Supabase (Postgres with Row Level Security, Auth, Storage).
@@ -24,14 +26,14 @@ npm run dev                     # http://localhost:3000
 | Email/password, magic link, password reset, logout | implemented (needs Supabase Auth URL config) |
 | Google OAuth | implemented; **needs your Google Cloud client + Supabase provider settings** |
 | Marketplace, listings with photos, Dutch auction, claims, QR handovers, rentals, rent-to-own, disputes, warden and staff dashboards, admin roles | implemented |
-| Database schema, RLS, storage policies | 5 forward migrations; **you apply them** (not yet applied to the project in `.env.local`) |
+| Database schema, RLS, storage policies | 6 forward migrations; **you apply them** (`npm run db:migrate`) (not yet applied to the project in `.env.local`) |
 | Payments | **simulated only** (Level 2: real gateway) |
 
-Verification (last run, 2026-10-10): lint, typecheck and format pass; **118 Vitest tests pass**
-(domain plus RLS/workflow tests running the real migrations in PGlite); production build passes;
-**29 Playwright + axe checks pass** on mobile and desktop; 45 legacy pytest tests pass. The
-signed-in E2E journey and the live-Supabase concurrency tests are opt-in and **were not run**
-(they need a migrated, seeded project). See [docs/level-1/TEST_PLAN.md](docs/level-1/TEST_PLAN.md).
+Verification (last run, 2026-10-24, Next.js 16.4.2): lint, typecheck and format pass; **165 Vitest tests**
+(including 53 database-policy tests), **59 Playwright + axe checks** and **41 Selenium WebDriver tests** pass, the
+Selenium signed-in journeys running against the live Supabase project (purchase + rating, rental, photo upload, report
+moderation, warden); production build passes; 45 legacy pytest tests pass. See
+[docs/level-1/TEST_PLAN.md](docs/level-1/TEST_PLAN.md).
 
 Documentation: [Setup](docs/level-1/SETUP.md) · [Architecture](docs/level-1/ARCHITECTURE.md) ·
 [Data model](docs/level-1/DATA_MODEL.md) · [Business rules](docs/level-1/BUSINESS_RULES.md) ·

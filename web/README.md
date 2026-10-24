@@ -19,15 +19,19 @@ Optional demo data for a development project:
 
 ## Scripts
 
-| Script | Purpose |
-|---|---|
-| `dev` / `build` / `start` | Next.js |
-| `lint`, `typecheck`, `format`, `format:check` | ESLint, `tsc`, Prettier |
-| `test` | Vitest: domain, database (PGlite) and opt-in live suites |
-| `test:unit`, `test:db`, `test:integration` | individual suites |
-| `test:e2e` | Playwright + axe (run `build` first; it starts `next start` on port 3100) |
-| `seed:demo` | guarded demo seed (never in production) |
-| `verify` | format check, lint, typecheck, tests and build |
+| Script                                        | Purpose                                                                                              |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `dev` / `build` / `start`                     | Next.js                                                                                              |
+| `lint`, `typecheck`, `format`, `format:check` | ESLint, `tsc`, Prettier                                                                              |
+| `test`                                        | Vitest: domain, database (PGlite) and opt-in live suites                                             |
+| `test:unit`, `test:db`, `test:integration`    | individual suites                                                                                    |
+| `test:e2e`                                    | Playwright + axe (run `build` first; it starts `next start` on port 3100)                            |
+| `db:migrate`                                  | apply pending migrations using `SUPABASE_DB_URL` (TLS verified)                                      |
+| `doctor`                                      | read-only check of every connection (env, DNS, REST, Auth, DB, migrations, privileges, demo sign-in) |
+| `test:selenium`                               | Selenium WebDriver suite in headless Chrome (run `build` first)                                      |
+| `seed:photos` | adds freely licensed demo photos (Wikimedia Commons) to demo listings |
+| `seed:demo`                                   | guarded demo seed (never in production)                                                              |
+| `verify`                                      | format check, lint, typecheck, tests and build                                                       |
 
 ## Features
 
@@ -47,6 +51,10 @@ Optional demo data for a development project:
 - **Warden dashboard:** final-hour queue and routing to staff, open disputes, staff
   transfers, no-dues check, estimated impact.
 - **Staff custody:** queue plus QR acceptance. **Admin:** scoped role management with an audit trail.
+- **Photos:** compressed in the browser (≈200 KB full image + ≈20 KB preview), served straight from Supabase Storage.
+- **Trust:** seller ratings after completed transactions, report-a-listing with warden moderation, share button.
+- **Saved items:** a heart on every listing, private to you, with a Saved page.
+- **Public pages:** How it works, About, Campus impact, Trust and safety, Help, Contact, Privacy, Terms, Accessibility; sitemap and robots.
 - **My Activity:** buying, selling, rentals, staff handoffs, listings, and the full sandbox ledger.
 
 ## Documentation

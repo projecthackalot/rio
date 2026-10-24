@@ -45,8 +45,22 @@ Migrations live in `web/supabase/migrations/` and must be applied in filename or
 | `20261010000300_functions.sql` | business RPCs, signup provisioning, read models |
 | `20261010000400_rls_and_grants.sql` | revokes Supabase's default grants; RLS and column-level grants |
 | `20261010000500_storage.sql` | `listing-media` (public) and `dispute-evidence` (private) buckets and policies |
+| `20261012000100_favorites.sql` | saved items, private per user |
+| `20261012000200_price_function_no_private_call.sql` | fix: live price readable by ordinary roles |
 
-**With the Supabase CLI (recommended):**
+**With the bundled script (no CLI or Docker needed):** add `SUPABASE_DB_URL` (Supabase → Connect →
+Session pooler URI) to `.env.local`, then:
+
+```bash
+npm run db:migrate -- --dry-run
+npm run db:migrate -- --mark-applied=20231009000000,20231010000000   # only if those two were run by hand
+npm run db:migrate
+```
+
+It applies pending files in order, one transaction each, records them in Supabase's migration
+history, and always verifies TLS (set `SUPABASE_DB_CA_CERT` to Supabase's CA file if needed).
+
+**With the Supabase CLI:**
 
 ```bash
 cd web
@@ -160,6 +174,8 @@ npm run build && npm start
 ```
 
 ## 9. Deploy (Vercel)
+
+Full free-tier guide: [DEPLOY.md](DEPLOY.md). Summary:
 
 1. Import the repository and set **Root Directory** to `web`.
 2. Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `NEXT_PUBLIC_SITE_URL`
